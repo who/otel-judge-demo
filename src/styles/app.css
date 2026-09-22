@@ -89,11 +89,12 @@ select {
  */
 .app-shell {
   display: grid;
-  grid-template-rows: minmax(var(--header-height), auto) 1fr;
+  grid-template-rows: minmax(var(--header-height), auto) 1fr auto;
   grid-template-columns: minmax(0, 1fr) var(--inspector-width);
   grid-template-areas:
     'header header'
-    'board inspector';
+    'board inspector'
+    'footer footer';
   min-height: 100vh;
 }
 
@@ -115,6 +116,11 @@ select {
   overflow: auto;
 }
 
+.app-shell__footer {
+  grid-area: footer;
+  min-width: 0;
+}
+
 .app-shell__inspector {
   grid-area: inspector;
   min-width: 0;
@@ -131,11 +137,12 @@ select {
 @media (max-width: 900px) {
   .app-shell {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(var(--header-height), auto) auto auto;
+    grid-template-rows: minmax(var(--header-height), auto) auto auto auto;
     grid-template-areas:
       'header'
       'board'
-      'inspector';
+      'inspector'
+      'footer';
   }
 
   .app-shell__inspector {
@@ -750,5 +757,66 @@ select {
 }
 
 .emit-controls__status[data-tone='disabled'] {
+  color: var(--ink-muted);
+}
+
+/*
+ * Pipeline console: a terminal-style strip along the foot of the page that
+ * narrates packets as they move. Newest lines sit at the bottom, so the
+ * viewport is capped in height and scrolls rather than pushing the board up as
+ * the demo runs. Kind tints a line; the words carry the same meaning without it.
+ */
+.pipeline-console {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-6);
+  background: var(--surface-sunken);
+  border-top: 1px solid var(--border);
+}
+
+.pipeline-console__title {
+  color: var(--ink-muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.pipeline-console__viewport {
+  max-height: 9rem;
+  overflow-y: auto;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+
+.pipeline-console__lines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+.pipeline-console__line {
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.pipeline-console__line[data-kind='llama-finished'] {
+  color: var(--stage-verdict);
+}
+
+.pipeline-console__line[data-kind='jev-failed'] {
+  color: var(--verdict-escalate);
+}
+
+.pipeline-console__line[data-kind='board-cleared'] {
+  color: var(--ink-muted);
+}
+
+.pipeline-console__idle {
   color: var(--ink-muted);
 }

@@ -7,6 +7,12 @@ export interface AppShellProps {
   board: ReactNode
   /** Rendered inside the complementary landmark; the right inspector rail. */
   inspector: ReactNode
+  /**
+   * Rendered inside the contentinfo landmark across the foot of the page.
+   * Optional: with no slot the row collapses and the shell is the two-region
+   * layout it was before, so a caller that wants no footer passes nothing.
+   */
+  footer?: ReactNode
 }
 
 /**
@@ -16,9 +22,11 @@ export interface AppShellProps {
  *
  * Each slot maps to exactly one landmark element. The inspector rail is
  * always rendered, even when its slot is empty, so it keeps its width and the
- * board never jumps horizontally when a packet is deselected.
+ * board never jumps horizontally when a packet is deselected. The footer is the
+ * exception: an absent slot renders no element at all rather than an empty
+ * landmark for a screen reader to announce.
  */
-export function AppShell({ header, board, inspector }: AppShellProps) {
+export function AppShell({ header, board, inspector, footer }: AppShellProps) {
   return (
     <div className="app-shell">
       <header className="app-shell__header">{header}</header>
@@ -26,6 +34,7 @@ export function AppShell({ header, board, inspector }: AppShellProps) {
       <aside className="app-shell__inspector" aria-label="Inspector">
         {inspector}
       </aside>
+      {footer !== undefined && <footer className="app-shell__footer">{footer}</footer>}
     </div>
   )
 }

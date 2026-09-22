@@ -5,6 +5,7 @@ import { BoardEmptyState } from './components/BoardEmptyState'
 import { ConnectionBadge } from './components/ConnectionBadge'
 import { EmitControls } from './components/EmitControls'
 import { Inspector } from './components/Inspector'
+import { PipelineConsole } from './components/PipelineConsole'
 import { useBoardState } from './hooks/useBoardState'
 import { readEnv } from './lib/env'
 
@@ -66,6 +67,10 @@ export function App() {
         </>
       }
       inspector={<Inspector packet={selectedPacket} />}
+      // The console reads the same board the columns render, so a line is
+      // printed for exactly the movement a reviewer just watched, whether the
+      // board came from the Worker or from the mock fixture's tick.
+      footer={<PipelineConsole state={board} />}
     />
   )
 }
