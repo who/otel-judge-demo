@@ -61,7 +61,7 @@ This repo does **not** implement chaos LLM logic. It only passes scenario/rate p
 ## Requirements
 
 - FR1: With Worker up and CORS allowlisted, board shows live packet stages  
-- FR2: Emit calls firehose producer; resulting packet appears and progresses to a verdict on the board  
+- FR2: Emit calls firehose producer; resulting packet appears and progresses to a verdict on the board. When Jev is unavailable Judge skips Llama, so the packet settles at the jev stage with no verdict and the board marks it skipped rather than pending  
 - FR3: No secrets in `import.meta.env` beyond public Worker URL  
 - FR4: Inspector renders Jev distributions + Llama verdict from Agent state/API  
 - NFR1: Light-mode product demo aesthetic  

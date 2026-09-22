@@ -52,6 +52,13 @@ export interface Packet {
   jev?: JevDistribution
   /** Absent until the packet has passed through the `llama` stage. */
   llama?: LlamaVerdict
+  /**
+   * Set by Judge when System One could not score this packet. Jev being
+   * unavailable ends the evaluation there: System Two never runs, so the
+   * packet settles in the `jev` stage carrying neither a distribution nor a
+   * verdict. Absent on every packet that is merely still in flight.
+   */
+  jevUnavailable?: boolean
 }
 
 /** Producer controls mirrored from the firehose emitter. */
@@ -67,4 +74,16 @@ export interface BoardState {
   producer: ProducerState
   /** ISO 8601 timestamp of the last state change. */
   updatedAt: string
+}
+
+/**
+ * True when the packet has settled without a Llama verdict because Jev was
+ * unavailable. A packet still in flight through the `jev` stage also carries
+ * no distribution and no verdict, so missing data cannot tell the two apart;
+ * only the explicit flag can, which is why callers branch on this predicate
+ * rather than on `llama === undefined`. A verdict that did arrive always
+ * wins, so a stale flag can never hide a real judgement.
+ */
+export function isLlamaSkipped(packet: Packet): boolean {
+  return packet.jevUnavailable === true && packet.llama === undefined
 }

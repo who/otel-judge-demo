@@ -1,4 +1,4 @@
-import { PACKET_STAGES } from '../types/board'
+import { isLlamaSkipped, PACKET_STAGES } from '../types/board'
 import type { BoardState, Packet, PacketStage } from '../types/board'
 
 // Every value below is hardcoded. No Date.now(), no Math.random(), so component
@@ -71,6 +71,15 @@ const MOCK_PACKETS: readonly Packet[] = [
       actions: ['Page the payments on-call', 'Pause the refund retry worker', 'Open an incident'],
     },
   },
+  {
+    // Jev was unavailable for this packet, so Judge skipped Llama and it
+    // settles here: it is finished, not queued behind the llama stage.
+    id: 'pkt-0008',
+    stage: 'jev',
+    receivedAt: '2026-09-21T10:00:07.000Z',
+    summary: { service: 'notifications', operation: 'POST /email', durationMs: 64, statusCode: 200 },
+    jevUnavailable: true,
+  },
 ]
 
 /**
@@ -82,21 +91,23 @@ export function mockBoardState(): BoardState {
   return {
     packets: MOCK_PACKETS.map(clonePacket),
     producer: { scenario: 'mixed-traffic', ratePerSec: 2, paused: false },
-    updatedAt: '2026-09-21T10:00:06.000Z',
+    updatedAt: '2026-09-21T10:00:07.000Z',
   }
 }
 
 /**
  * Returns a new BoardState with every packet moved one stage forward. Packets
- * already at `verdict` stay where they are. The input is never mutated, which
- * matches the immutable update the agent adapter performs.
+ * already at `verdict` stay where they are, and so do packets whose Llama step
+ * was skipped: those are finished, and walking them into the llama stage would
+ * show the board waiting on a step that is never going to run. The input is
+ * never mutated, which matches the immutable update the agent adapter performs.
  */
 export function advanceMockBoard(state: BoardState): BoardState {
   return {
     ...state,
     packets: state.packets.map((packet) => ({
       ...clonePacket(packet),
-      stage: nextStage(packet.stage),
+      stage: isLlamaSkipped(packet) ? packet.stage : nextStage(packet.stage),
     })),
     producer: { ...state.producer },
   }

@@ -82,7 +82,7 @@ function isLlamaVerdict(value: unknown): value is LlamaVerdict {
  */
 function adaptPacket(value: unknown): Packet | null {
   if (!isRecord(value)) return null
-  const { id, stage, receivedAt, summary, jev, llama } = value
+  const { id, stage, receivedAt, summary, jev, llama, jevUnavailable } = value
   if (typeof id !== 'string' || id === '') return null
   if (!isStage(stage)) return null
 
@@ -100,6 +100,9 @@ function adaptPacket(value: unknown): Packet | null {
   }
   if (isJevDistribution(jev)) packet.jev = jev
   if (isLlamaVerdict(llama)) packet.llama = llama
+  // Only a literal true marks the skip. Any other value is treated as absent,
+  // so a malformed payload cannot report a live packet as finished.
+  if (jevUnavailable === true) packet.jevUnavailable = true
   return packet
 }
 

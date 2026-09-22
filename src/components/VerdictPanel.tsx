@@ -3,10 +3,18 @@ import type { LlamaVerdict } from '../types/board'
 export interface VerdictPanelProps {
   /** Llama's verdict, or null/undefined for a packet that has not reached the llama stage. */
   verdict: LlamaVerdict | null | undefined
+  /**
+   * True when the packet has settled with no verdict because Jev was
+   * unavailable. Only meaningful without a verdict; a verdict always wins.
+   */
+  skipped?: boolean
 }
 
-/** Shown when Llama has not judged the packet yet. */
+/** Shown when Llama has not judged the packet yet but still will. */
 export const AWAITING_VERDICT_TEXT = 'Awaiting Llama verdict'
+
+/** Shown when Llama never ran, so no verdict is coming for this packet. */
+export const LLAMA_SKIPPED_TEXT = 'Jev unavailable — Llama skipped'
 
 /**
  * The Llama verdict: its label, the free-text rationale, and the recommended
@@ -16,12 +24,16 @@ export const AWAITING_VERDICT_TEXT = 'Awaiting Llama verdict'
  *
  * An empty actions array renders no list at all rather than an empty bullet.
  * The panel is read-only: nothing here can be edited or executed.
+ *
+ * With no verdict the panel says which of the two no-verdict worlds this is:
+ * one where Llama is still coming, and one where Jev was unavailable and
+ * Llama was skipped, where promising a verdict would be a lie.
  */
-export function VerdictPanel({ verdict }: VerdictPanelProps) {
+export function VerdictPanel({ verdict, skipped = false }: VerdictPanelProps) {
   if (!verdict) {
     return (
-      <p className="inspector__pending" data-pending="verdict">
-        {AWAITING_VERDICT_TEXT}
+      <p className="inspector__pending" data-pending={skipped ? 'verdict-skipped' : 'verdict'}>
+        {skipped ? LLAMA_SKIPPED_TEXT : AWAITING_VERDICT_TEXT}
       </p>
     )
   }

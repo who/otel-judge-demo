@@ -1,5 +1,6 @@
 import { JevBars } from './JevBars'
 import { VerdictPanel } from './VerdictPanel'
+import { isLlamaSkipped } from '../types/board'
 import type { Packet } from '../types/board'
 
 export interface InspectorProps {
@@ -65,7 +66,7 @@ export function Inspector({ packet }: InspectorProps) {
         <h2 id="inspector-llama-heading" className="inspector__heading">
           Llama verdict
         </h2>
-        <VerdictPanel verdict={packet.llama} />
+        <VerdictPanel verdict={packet.llama} skipped={isLlamaSkipped(packet)} />
       </section>
     </div>
   )

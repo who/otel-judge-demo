@@ -1,7 +1,7 @@
 import { render, screen, within } from '@testing-library/react'
 import { Inspector, NO_SELECTION_TEXT } from './Inspector'
 import { AWAITING_JEV_TEXT } from './JevBars'
-import { AWAITING_VERDICT_TEXT } from './VerdictPanel'
+import { AWAITING_VERDICT_TEXT, LLAMA_SKIPPED_TEXT } from './VerdictPanel'
 import { mockBoardState } from '../mock/boardFixture'
 import type { Packet } from '../types/board'
 
@@ -109,6 +109,25 @@ describe('Inspector', () => {
     expect(screen.queryByText(AWAITING_JEV_TEXT)).not.toBeInTheDocument()
     expect(screen.getAllByRole('meter')).toHaveLength(3)
     expect(screen.getByText(AWAITING_VERDICT_TEXT)).toBeInTheDocument()
+    expect(screen.queryByText(LLAMA_SKIPPED_TEXT)).not.toBeInTheDocument()
+  })
+
+  it('says Llama was skipped, not awaited, for a packet that settled without Jev', () => {
+    const packet = fixturePacket('pkt-0008')
+    expect(packet.llama).toBeUndefined()
+    render(<Inspector packet={packet} />)
+
+    const section = screen.getByRole('region', { name: 'Llama verdict' })
+    expect(within(section).getByText(LLAMA_SKIPPED_TEXT)).toBeInTheDocument()
+    expect(within(section).queryByText(AWAITING_VERDICT_TEXT)).not.toBeInTheDocument()
+  })
+
+  it('keeps the awaiting copy for an unjudged packet that carries no skip flag', () => {
+    const packet: Packet = { ...fixturePacket('pkt-0008'), jevUnavailable: undefined }
+    render(<Inspector packet={packet} />)
+
+    expect(screen.getByText(AWAITING_VERDICT_TEXT)).toBeInTheDocument()
+    expect(screen.queryByText(LLAMA_SKIPPED_TEXT)).not.toBeInTheDocument()
   })
 
   it('renders the pick-a-packet instruction with no selection', () => {

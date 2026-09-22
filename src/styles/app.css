@@ -262,7 +262,8 @@ select {
   grid-template-columns: minmax(0, 1fr) auto;
   grid-template-areas:
     'service duration'
-    'operation duration';
+    'operation duration'
+    'badge badge';
   column-gap: var(--space-2);
   width: 100%;
   min-width: 0;
@@ -348,6 +349,24 @@ select {
   grid-area: operation;
   font-family: var(--font-mono);
   font-size: var(--text-xs);
+  color: var(--ink-muted);
+}
+
+/*
+ * Skipped badge: an outlined word rather than a colour, so the "this packet is
+ * finished" signal survives greyscale and sits below the chip's two text rows.
+ * The row is empty and therefore zero-height on every other chip.
+ */
+.packet-chip__badge {
+  grid-area: badge;
+  justify-self: start;
+  margin-top: var(--space-1);
+  padding: 0 var(--space-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   color: var(--ink-muted);
 }
 

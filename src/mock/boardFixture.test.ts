@@ -1,4 +1,4 @@
-import { PACKET_STAGES } from '../types/board'
+import { isLlamaSkipped, PACKET_STAGES } from '../types/board'
 import { advanceMockBoard, mockBoardState } from './boardFixture'
 
 describe('mockBoardState', () => {
@@ -18,6 +18,14 @@ describe('mockBoardState', () => {
     expect(ingest).toBeDefined()
     expect(ingest?.jev).toBeUndefined()
     expect(ingest?.llama).toBeUndefined()
+  })
+
+  it('has a jev packet that settled with Llama skipped and no distribution', () => {
+    const skipped = mockBoardState().packets.filter(isLlamaSkipped)
+    expect(skipped).toHaveLength(1)
+    expect(skipped[0]?.stage).toBe('jev')
+    expect(skipped[0]?.jev).toBeUndefined()
+    expect(skipped[0]?.llama).toBeUndefined()
   })
 
   it('has a packet carrying both a full jev distribution and a llama verdict', () => {
@@ -60,9 +68,23 @@ describe('advanceMockBoard', () => {
     const after = advanceMockBoard(before)
     expect(after.packets).toHaveLength(before.packets.length)
     before.packets.forEach((packet, index) => {
+      if (isLlamaSkipped(packet)) return
       const expected = PACKET_STAGES[Math.min(PACKET_STAGES.indexOf(packet.stage) + 1, PACKET_STAGES.length - 1)]
       expect(after.packets[index]?.stage).toBe(expected)
       expect(after.packets[index]?.id).toBe(packet.id)
     })
+  })
+
+  it('holds a Llama-skipped packet in the jev stage instead of walking it into llama', () => {
+    let state = mockBoardState()
+    const skippedId = state.packets.find(isLlamaSkipped)?.id
+    expect(skippedId).toBeDefined()
+
+    for (let tick = 0; tick < PACKET_STAGES.length + 1; tick += 1) {
+      state = advanceMockBoard(state)
+      const packet = state.packets.find((candidate) => candidate.id === skippedId)
+      expect(packet?.stage).toBe('jev')
+      expect(packet?.jevUnavailable).toBe(true)
+    }
   })
 })
