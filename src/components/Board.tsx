@@ -20,6 +20,10 @@ export interface BoardProps {
  * the parent, which lets the live-state task swap the data source without
  * touching anything here.
  *
+ * Within a column the order is the board's own array order, except at the
+ * verdict stage, which is ordered newest first so the judgement a reviewer is
+ * waiting on is the one at the top.
+ *
  * A chip that advances a stage re-mounts under a different column, which
  * would drop keyboard focus on the body. The board remembers which chip was
  * focused and hands focus back to the re-mounted chip, so a keyboard user
@@ -68,7 +72,10 @@ export function Board({ state, selectedId, onSelect }: BoardProps) {
           <StageColumn
             key={stage}
             stage={stage}
-            packets={state.packets.filter((packet) => packet.stage === stage)}
+            packets={sortPacketsForColumn(
+              stage,
+              state.packets.filter((packet) => packet.stage === stage),
+            )}
             selectedId={selectedId}
             onSelect={onSelect}
           />
@@ -93,6 +100,52 @@ function cssEscape(value: string): string {
   return typeof CSS !== 'undefined' && typeof CSS.escape === 'function'
     ? CSS.escape(value)
     : value.replace(/["\\]/g, '\\$&')
+}
+
+/**
+ * The packets of one column in the order that column should show them.
+ *
+ * Only the verdict column is ordered. The three upstream columns keep the
+ * order Judge published them in, which reads as the pipeline filling up, and
+ * every packet there leaves for the next stage shortly anyway. Verdict is the
+ * terminal stage, so it only ever grows: without an order of its own the newest
+ * judgement lands wherever it happens to sit in the array, which is the one
+ * chip a reviewer is actually waiting for.
+ */
+function sortPacketsForColumn(stage: PacketStage, packets: Packet[]): Packet[] {
+  if (stage !== 'verdict') return packets
+  return [...packets].sort(newestFirst)
+}
+
+/**
+ * Compare two packets so the more recent one sorts first.
+ *
+ * A packet whose arrival time cannot be read sorts below every dated packet:
+ * an unknown timestamp is the one thing that must not be presented as the
+ * latest judgement. Packets that compare equal — the same instant, or two
+ * unreadable timestamps — return 0 and so keep their relative order, because
+ * Array.prototype.sort is stable; a batch Judge published together therefore
+ * holds its shape instead of reshuffling on the next state push.
+ */
+function newestFirst(a: Packet, b: Packet): number {
+  const left = receivedAtMs(a)
+  const right = receivedAtMs(b)
+  if (left === right) return 0
+  if (left === undefined) return 1
+  if (right === undefined) return -1
+  return right - left
+}
+
+/**
+ * A packet's arrival time in milliseconds, or undefined when there is none to
+ * read. The timestamp is parsed rather than compared as a string so packets
+ * stamped in different UTC offsets still order by real time, and so the empty
+ * string the agent adapter substitutes for a missing value is recognised as
+ * absent rather than sorting as the earliest possible date.
+ */
+function receivedAtMs(packet: Packet): number | undefined {
+  const parsed = Date.parse(packet.receivedAt)
+  return Number.isNaN(parsed) ? undefined : parsed
 }
 
 interface StageColumnProps {

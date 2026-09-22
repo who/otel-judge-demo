@@ -5,7 +5,7 @@ import { Board } from './Board'
 import { SKIPPED_BADGE_TEXT } from './PacketChip'
 import { mockBoardState } from '../mock/boardFixture'
 import { PACKET_STAGES } from '../types/board'
-import type { BoardState, Packet } from '../types/board'
+import type { BoardState, Packet, PacketStage } from '../types/board'
 
 function renderBoard(state: BoardState, selectedId: string | null = null) {
   const onSelect = vi.fn()
@@ -15,6 +15,23 @@ function renderBoard(state: BoardState, selectedId: string | null = null) {
 
 function column(stage: string) {
   return screen.getByRole('region', { name: new RegExp(`^${stage}`) })
+}
+
+/** A minimal packet built here rather than from the fixture, so the ordering tests own their timestamps. */
+function packetAt(id: string, stage: PacketStage, receivedAt: string): Packet {
+  return {
+    id,
+    stage,
+    receivedAt,
+    summary: { service: 'orders', operation: 'GET /orders', durationMs: 12, statusCode: 200 },
+  }
+}
+
+/** Packet ids of the chips in a column, top to bottom. */
+function chipIds(scope: HTMLElement) {
+  return within(scope)
+    .getAllByRole('button')
+    .map((chip) => chip.getAttribute('data-packet-id'))
 }
 
 describe('Board', () => {
@@ -98,6 +115,60 @@ describe('Board', () => {
     expect(screen.getAllByRole('region')).toHaveLength(PACKET_STAGES.length)
     expect(screen.getAllByText('No packets')).toHaveLength(PACKET_STAGES.length)
     expect(screen.queryAllByRole('button')).toHaveLength(0)
+  })
+
+  it('shows the newest verdict packet at the top whatever order the board sent', () => {
+    const state = mockBoardState()
+    state.packets = [
+      packetAt('pkt-oldest', 'verdict', '2026-02-01T10:00:00.000Z'),
+      packetAt('pkt-newest', 'verdict', '2026-02-01T10:00:02.000Z'),
+      packetAt('pkt-middle', 'verdict', '2026-02-01T10:00:01.000Z'),
+    ]
+    renderBoard(state)
+
+    expect(chipIds(column('verdict'))).toEqual(['pkt-newest', 'pkt-middle', 'pkt-oldest'])
+  })
+
+  it('sorts a verdict packet with no arrival time below the dated ones', () => {
+    const state = mockBoardState()
+    state.packets = [
+      packetAt('pkt-undated', 'verdict', ''),
+      packetAt('pkt-older', 'verdict', '2026-02-01T10:00:00.000Z'),
+      packetAt('pkt-newer', 'verdict', '2026-02-01T10:00:02.000Z'),
+    ]
+    renderBoard(state)
+
+    expect(chipIds(column('verdict'))).toEqual(['pkt-newer', 'pkt-older', 'pkt-undated'])
+  })
+
+  it('leaves verdict packets stamped at the same instant in the order they arrived', () => {
+    const sameInstant = '2026-02-01T10:00:00.000Z'
+    const state = mockBoardState()
+    state.packets = [
+      packetAt('pkt-first', 'verdict', sameInstant),
+      packetAt('pkt-second', 'verdict', sameInstant),
+      packetAt('pkt-third', 'verdict', sameInstant),
+    ]
+    renderBoard(state)
+
+    expect(chipIds(column('verdict'))).toEqual(['pkt-first', 'pkt-second', 'pkt-third'])
+  })
+
+  it('keeps the upstream columns in board order instead of sorting them too', () => {
+    const state = mockBoardState()
+    state.packets = [
+      packetAt('pkt-ingest-old', 'ingest', '2026-02-01T10:00:00.000Z'),
+      packetAt('pkt-ingest-new', 'ingest', '2026-02-01T10:00:03.000Z'),
+      packetAt('pkt-jev-new', 'jev', '2026-02-01T10:00:04.000Z'),
+      packetAt('pkt-jev-old', 'jev', '2026-02-01T10:00:01.000Z'),
+      packetAt('pkt-llama-undated', 'llama', ''),
+      packetAt('pkt-llama-dated', 'llama', '2026-02-01T10:00:02.000Z'),
+    ]
+    renderBoard(state)
+
+    expect(chipIds(column('ingest'))).toEqual(['pkt-ingest-old', 'pkt-ingest-new'])
+    expect(chipIds(column('jev'))).toEqual(['pkt-jev-new', 'pkt-jev-old'])
+    expect(chipIds(column('llama'))).toEqual(['pkt-llama-undated', 'pkt-llama-dated'])
   })
 
   it('drops a packet with an unknown stage from the columns and counts it', () => {
