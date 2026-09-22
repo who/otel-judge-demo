@@ -308,3 +308,170 @@ select {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/*
+ * Inspector rail: the selected packet's summary, Jev bars and Llama verdict
+ * stacked in sections. The rail scrolls (see .app-shell__inspector) so a long
+ * rationale wraps and scrolls within it rather than stretching the layout.
+ */
+.inspector {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  min-width: 0;
+}
+
+.inspector__instruction,
+.inspector__pending {
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+}
+
+.inspector__pending {
+  padding: var(--space-3);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-md);
+  text-align: center;
+}
+
+.inspector__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.inspector__heading {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+.inspector__summary {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+}
+
+.inspector__field {
+  display: contents;
+}
+
+.inspector__field > dt {
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+}
+
+.inspector__field > dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+
+.inspector__mono {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+
+/*
+ * Jev bars: label, proportional track, percentage. The track is a meter whose
+ * fill width is the probability; the value column keeps the exact number
+ * beside the bar so the chart is never the only place the value lives.
+ */
+.jev-bars {
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(0, 1fr) auto;
+  gap: var(--space-2) var(--space-3);
+  align-items: center;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.jev-bars__row {
+  display: contents;
+}
+
+.jev-bars__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+.jev-bars__track {
+  height: 0.75rem;
+  min-width: 0;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.jev-bars__fill {
+  height: 100%;
+  background: var(--stage-jev);
+  border-radius: inherit;
+}
+
+.jev-bars__value {
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/*
+ * Verdict panel: the label badge carries a semantic verdict token and is
+ * always paired with the verdict word in text.
+ */
+.verdict-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.verdict-panel__label {
+  display: inline-block;
+  padding: var(--space-1) var(--space-3);
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.verdict-panel__label[data-verdict='pass'] {
+  color: var(--verdict-pass);
+  background: var(--verdict-pass-soft);
+}
+
+.verdict-panel__label[data-verdict='flag'] {
+  color: var(--verdict-flag);
+  background: var(--verdict-flag-soft);
+}
+
+.verdict-panel__label[data-verdict='escalate'] {
+  color: var(--verdict-escalate);
+  background: var(--verdict-escalate-soft);
+}
+
+.verdict-panel__rationale {
+  overflow-wrap: anywhere;
+}
+
+.verdict-panel__actions {
+  margin: 0;
+  padding-left: var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
