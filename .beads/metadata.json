@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "otel_judge_demo",
+  "project_id": "c4d51d3f-3571-4704-8d3e-9ef359edad51"
+}
