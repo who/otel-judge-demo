@@ -72,10 +72,14 @@ select {
   color: inherit;
 }
 
+/*
+ * Focus is shown on :focus-visible only: a keyboard user always sees the ring,
+ * a mouse user never does. An outline rather than a box-shadow keeps the ring
+ * independent of the selected-chip shadow and clear of any clipped parent.
+ */
 :focus-visible {
-  outline: none;
-  box-shadow: var(--focus-ring);
-  border-radius: var(--radius-sm);
+  outline: var(--focus-outline);
+  outline-offset: var(--focus-outline-offset);
 }
 
 /*
@@ -159,6 +163,30 @@ select {
 }
 
 .board__unknown {
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+}
+
+/*
+ * First-load empty state: sits above the four empty columns and names the
+ * emit control, so an idle board tells the reviewer what to do next.
+ */
+.board-empty {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+  padding: var(--space-4) var(--space-6);
+  background: var(--surface-raised);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-lg);
+}
+
+.board-empty__text {
+  font-weight: 600;
+}
+
+.board-empty__note {
   color: var(--ink-muted);
   font-size: var(--text-sm);
 }
@@ -250,6 +278,34 @@ select {
 
 .packet-chip:hover {
   border-color: var(--border-strong);
+}
+
+/*
+ * Stage movement: a chip re-mounts in its new column, so the motion is an
+ * entrance slide plus a 200ms transition on its selection and hover styles.
+ * Everything lives inside the no-preference query, so a visitor who asked for
+ * less motion sees the chip change column instantly rather than half-animate.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  .packet-chip {
+    animation: packet-chip-enter 200ms ease-out;
+    transition:
+      border-color 200ms ease,
+      background-color 200ms ease,
+      box-shadow 200ms ease;
+  }
+
+  @keyframes packet-chip-enter {
+    from {
+      opacity: 0;
+      transform: translateX(-0.5rem);
+    }
+
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
 }
 
 .packet-chip[aria-pressed='true'] {
@@ -488,7 +544,6 @@ select {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  margin-left: auto;
   min-width: 0;
   padding: var(--space-1) var(--space-3);
   border: 1px solid var(--border);
@@ -550,6 +605,7 @@ select {
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
+  margin-left: auto;
   min-width: 0;
 }
 

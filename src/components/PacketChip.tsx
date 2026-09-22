@@ -17,6 +17,9 @@ export interface PacketChipProps {
  * screen-reader user hears where the packet sits without walking up to the
  * column heading. Clicking an already selected chip still calls onSelect;
  * deselect semantics belong to the parent.
+ *
+ * The packet id is exposed as a data attribute so the board can find this
+ * chip again after it re-mounts in a new column and hand focus back to it.
  */
 export function PacketChip({ packet, selected, onSelect }: PacketChipProps) {
   const { service, operation, durationMs } = packet.summary
@@ -25,6 +28,7 @@ export function PacketChip({ packet, selected, onSelect }: PacketChipProps) {
       type="button"
       className="packet-chip"
       data-stage={packet.stage}
+      data-packet-id={packet.id}
       aria-pressed={selected}
       aria-label={`${service} ${operation} ${durationMs} ms, ${packet.stage} stage`}
       title={`${service} ${operation}`}

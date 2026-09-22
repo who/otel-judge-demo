@@ -1,3 +1,5 @@
+import { useLayoutEffect, useRef } from 'react'
+import type { FocusEvent } from 'react'
 import { PACKET_STAGES } from '../types/board'
 import type { BoardState, Packet, PacketStage } from '../types/board'
 import { PacketChip } from './PacketChip'
@@ -17,13 +19,50 @@ export interface BoardProps {
  * stage keeps its column. Board holds no state of its own: selection lives in
  * the parent, which lets the live-state task swap the data source without
  * touching anything here.
+ *
+ * A chip that advances a stage re-mounts under a different column, which
+ * would drop keyboard focus on the body. The board remembers which chip was
+ * focused and hands focus back to the re-mounted chip, so a keyboard user
+ * following a packet is never thrown back to the start of the page.
  */
 export function Board({ state, selectedId, onSelect }: BoardProps) {
   const known = new Set<string>(PACKET_STAGES)
   const unknownCount = state.packets.filter((packet) => !known.has(packet.stage)).length
 
+  const rootRef = useRef<HTMLDivElement>(null)
+  const focusedIdRef = useRef<string | null>(null)
+  const stagesRef = useRef<ReadonlyMap<string, PacketStage>>(new Map())
+
+  // Focus events bubble in React, so one pair of handlers on the root covers
+  // every chip. A blur whose relatedTarget is set means focus moved somewhere
+  // on purpose; a blur with no relatedTarget is either a click on empty space
+  // (the chip is still in the document) or the chip being removed (it is not).
+  const handleFocus = (event: FocusEvent<HTMLDivElement>) => {
+    focusedIdRef.current = chipId(event.target)
+  }
+  const handleBlur = (event: FocusEvent<HTMLDivElement>) => {
+    if (event.relatedTarget !== null || event.target.isConnected) focusedIdRef.current = null
+  }
+
+  useLayoutEffect(() => {
+    const previous = stagesRef.current
+    stagesRef.current = new Map(state.packets.map((packet) => [packet.id, packet.stage]))
+
+    const id = focusedIdRef.current
+    if (id === null) return
+    const moved = previous.get(id) !== undefined && previous.get(id) !== stagesRef.current.get(id)
+    if (!moved) return
+
+    const active = document.activeElement
+    const focusLost = active === null || active === document.body || !active.isConnected
+    if (!focusLost) return
+
+    const chip = rootRef.current?.querySelector<HTMLElement>(`[data-packet-id="${cssEscape(id)}"]`)
+    chip?.focus({ preventScroll: true })
+  })
+
   return (
-    <div className="board">
+    <div className="board" ref={rootRef} onFocus={handleFocus} onBlur={handleBlur}>
       <div className="board__columns">
         {PACKET_STAGES.map((stage) => (
           <StageColumn
@@ -42,6 +81,18 @@ export function Board({ state, selectedId, onSelect }: BoardProps) {
       )}
     </div>
   )
+}
+
+/** The packet id of a focused chip, or null when the focused element is not a chip. */
+function chipId(target: EventTarget | null): string | null {
+  return target instanceof HTMLElement ? (target.dataset.packetId ?? null) : null
+}
+
+/** Escape a packet id for use inside an attribute selector; ids are opaque strings from the Worker. */
+function cssEscape(value: string): string {
+  return typeof CSS !== 'undefined' && typeof CSS.escape === 'function'
+    ? CSS.escape(value)
+    : value.replace(/["\\]/g, '\\$&')
 }
 
 interface StageColumnProps {

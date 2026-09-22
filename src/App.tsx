@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react'
 import { AppShell } from './components/AppShell'
 import { Board } from './components/Board'
+import { BoardEmptyState } from './components/BoardEmptyState'
 import { ConnectionBadge } from './components/ConnectionBadge'
 import { EmitControls } from './components/EmitControls'
 import { Inspector } from './components/Inspector'
@@ -20,8 +21,9 @@ export function App() {
 
   // Board ownership sits in the hook: mock fixture with no Worker configured,
   // live Agent state otherwise. Selection below never cares which it is; the
-  // badge is the only consumer of the status. The emit controls share the
-  // same env so they and the badge agree on which producer is configured.
+  // badge and the empty state are the only consumers of the status. The emit
+  // controls share the same env so they and the badge agree on which producer
+  // is configured.
   const { board, status } = useBoardState({ env })
 
   // Only the id is stored, never the packet object. The packet is re-resolved
@@ -41,16 +43,27 @@ export function App() {
   // packet that briefly drops off between updates reselects itself on return.
   const selectedPacket = board.packets.find((packet) => packet.id === selectedId) ?? null
 
+  // Header DOM order is the tab order: badge, then the emit controls in their
+  // own left-to-right order, then the board, then the inspector. Nothing here
+  // carries a tabindex, so the sequence a keyboard user gets is exactly what
+  // is written below.
   return (
     <AppShell
       header={
         <>
           <h1>OTel Judge Demo</h1>
-          <EmitControls env={env} />
           <ConnectionBadge status={status} origin={env.apiBase} />
+          <EmitControls env={env} />
         </>
       }
-      board={<Board state={board} selectedId={selectedId} onSelect={handleSelect} />}
+      board={
+        <>
+          {board.packets.length === 0 && (
+            <BoardEmptyState status={status} firehoseConfigured={env.firehoseBase !== undefined} />
+          )}
+          <Board state={board} selectedId={selectedId} onSelect={handleSelect} />
+        </>
+      }
       inspector={<Inspector packet={selectedPacket} />}
     />
   )

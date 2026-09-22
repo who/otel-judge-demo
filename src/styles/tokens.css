@@ -9,7 +9,8 @@
  * single cool indigo accent used only for selection and focus. No orange and
  * no beige anywhere, per the PRD non-goal against Factorio branding and
  * news-site chrome. Text tokens hold at least 4.5:1 against the surface they
- * sit on.
+ * sit on, and the strong border used as a control boundary holds at least 3:1
+ * against every surface it can sit on (WCAG AA for non-text contrast).
  */
 :root {
   /* Surfaces */
@@ -17,7 +18,7 @@
   --surface-raised: #ffffff;
   --surface-sunken: #f1f3f6;
   --border: #d9dee5;
-  --border-strong: #b7bfca;
+  --border-strong: #7f8999;
 
   /* Ink */
   --ink: #1c2333;
@@ -28,7 +29,9 @@
   --accent: #4f46e5;
   --accent-ink: #ffffff;
   --accent-soft: #e0e7ff;
-  --focus-ring: 0 0 0 3px rgba(79, 70, 229, 0.35);
+  /* Keyboard focus: a solid outline offset from the control so it reads on any surface */
+  --focus-outline: 2px solid var(--accent);
+  --focus-outline-offset: 2px;
 
   /* Pipeline stages, in flow order */
   --stage-ingest: #475569;
