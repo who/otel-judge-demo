@@ -772,29 +772,18 @@ select {
   color: var(--ink-muted);
 }
 
-.emit-controls__field select,
-.emit-controls__field input[type='number'] {
+.emit-controls__field select {
   padding: var(--space-1) var(--space-2);
   background: var(--surface-raised);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
 }
 
-.emit-controls__field input[type='number'] {
-  width: 4.5rem;
-  font-variant-numeric: tabular-nums;
-}
-
-.emit-controls__field select:disabled,
-.emit-controls__field input:disabled {
+.emit-controls__field select:disabled {
   background: var(--surface-sunken);
   color: var(--ink-muted);
   border-color: var(--border);
   cursor: not-allowed;
-}
-
-.emit-controls__switch input[type='checkbox'] {
-  accent-color: var(--accent);
 }
 
 .emit-controls__status {

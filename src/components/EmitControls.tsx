@@ -2,8 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import { readEnv } from '../lib/env'
 import type { AppEnv } from '../lib/env'
-import { SCENARIOS, emitPackets, setPaused, setScenario } from '../lib/firehose'
-import type { FirehoseResult, Scenario } from '../lib/firehose'
+import { DEFAULT_SCENARIO, SCENARIOS, emitPackets, fetchScenarios } from '../lib/firehose'
+import type { FirehoseResult, ScenarioOption } from '../lib/firehose'
 import { resetBoard } from '../lib/judge'
 import type { JudgeResult } from '../lib/judge'
 
@@ -13,12 +13,21 @@ import type { JudgeResult } from '../lib/judge'
  */
 export const EMIT_COUNT = 5
 
-/** Inclusive bounds on the producer rate a reviewer may request. */
-export const RATE_MIN = 1
-export const RATE_MAX = 50
+/**
+ * The choice the dropdown offers until the producer's own listing arrives.
+ * Built from the client's static vocabulary so an unreachable producer, or one
+ * too old to serve a listing, still leaves a usable set of scenarios.
+ */
+const FALLBACK_SCENARIOS: readonly ScenarioOption[] = SCENARIOS.map((id) => ({ id }))
 
-/** Producer rate the controls start at before the reviewer touches them. */
-export const DEFAULT_RATE = 2
+/**
+ * What the status line says when a reviewer picks a scenario. The producer
+ * holds no scenario of its own, so the only honest thing to report is that the
+ * choice is waiting for the next press rather than that anything changed.
+ */
+export function scenarioSelectedText(scenario: string): string {
+  return `Next emit sends ${scenario}`
+}
 
 /** How long a success confirmation stays on screen. Errors never auto-clear. */
 export const STATUS_CLEAR_MS = 4000
@@ -37,7 +46,7 @@ export const NOT_CONFIGURED_TEXT = 'Firehose not configured'
  * The reset control is deliberately plain-spoken: it drops every packet the
  * board is holding, which during a demo is a thing you only want to do on
  * purpose. The name says "board" so it cannot be misread as resetting the
- * producer's scenario or rate.
+ * chosen scenario.
  */
 export const RESET_LABEL = 'Reset board'
 
@@ -76,27 +85,22 @@ export interface EmitControlsProps {
 /** Either client's result. The two shapes match so one status line renders both. */
 type ClientResult = FirehoseResult | JudgeResult
 
-/** Clamp a requested rate into the producer's accepted range. */
-export function clampRate(value: number): number {
-  return Math.min(RATE_MAX, Math.max(RATE_MIN, Math.round(value)))
-}
-
-function isScenario(value: string): value is Scenario {
-  return (SCENARIOS as readonly string[]).includes(value)
-}
-
 /**
- * Header controls that drive the otel-judge-firehose producer: emit a burst,
- * pick a scenario, set a rate, pause the stream. Every action goes through the
+ * Header controls that drive the otel-judge-firehose producer: pick a
+ * scenario, emit a burst of it, clear the board. Every action goes through the
  * firehose client; nothing here builds a request or generates a packet, and
  * the Agent is never asked to invent telemetry.
  *
- * All four controls share one in-flight flag, so a double click produces
- * exactly one request and a scenario change cannot race an emit. The status
- * line beneath the controls is a polite live region: a success confirmation
- * clears itself, an error stays until the next request replaces it, and a
- * missing firehose base leaves the controls disabled with an explanation
- * rather than removing them from the page.
+ * The producer keeps no running stream, so the scenario is a local choice that
+ * rides along with the next emit rather than a setting posted ahead of it.
+ * Nothing but the emit itself can fail, and the controls say so: picking a
+ * scenario never claims the producer changed underneath.
+ *
+ * Emit and reset share one in-flight flag, so a double click produces exactly
+ * one request. The status line beneath the controls is a polite live region: a
+ * success confirmation clears itself, an error stays until the next request
+ * replaces it, and a missing firehose base leaves the controls disabled with
+ * an explanation rather than removing them from the page.
  */
 export function EmitControls({ env: envProp, onClearBoard }: EmitControlsProps) {
   const [env] = useState<AppEnv>(() => envProp ?? readEnv())
@@ -104,9 +108,11 @@ export function EmitControls({ env: envProp, onClearBoard }: EmitControlsProps) 
   // Configured is state rather than derived from env alone: a client call that
   // comes back disabled also flips it off, so the two signals never disagree.
   const [configured, setConfigured] = useState(env.firehoseBase !== undefined)
-  const [scenario, setScenarioState] = useState<Scenario>(SCENARIOS[0])
-  const [rate, setRate] = useState(DEFAULT_RATE)
-  const [paused, setPausedState] = useState(false)
+  // The controls open on demo_mix, so a reviewer who presses Emit without
+  // touching anything gets packets across the failure classes rather than one
+  // bucket's worth. A listing without it moves the selection; see below.
+  const [scenario, setScenarioState] = useState<string>(DEFAULT_SCENARIO)
+  const [scenarios, setScenarios] = useState<readonly ScenarioOption[]>(FALLBACK_SCENARIOS)
   const [inFlight, setInFlight] = useState(false)
   const [status, setStatus] = useState<StatusMessage | null>(() =>
     env.firehoseBase === undefined ? { tone: 'disabled', text: NOT_CONFIGURED_TEXT } : null,
@@ -134,6 +140,30 @@ export function EmitControls({ env: envProp, onClearBoard }: EmitControlsProps) 
   }, [cancelClearTimer])
 
   /**
+   * The producer's own listing is the real vocabulary; the static list is only
+   * the opening guess. A listing that cannot be had leaves that guess in
+   * place, so the dropdown is never empty, the status line is never troubled
+   * by it, and an emit is never waiting on it. A chosen scenario the listing
+   * does not carry falls back to the first one it does.
+   */
+  useEffect(() => {
+    if (env.firehoseBase === undefined) return
+    let cancelled = false
+    void fetchScenarios({ env }).then((listed) => {
+      if (cancelled || !mountedRef.current || listed === null) return
+      const [first] = listed
+      if (first === undefined) return
+      setScenarios(listed)
+      setScenarioState((current) =>
+        listed.some((option) => option.id === current) ? current : first.id,
+      )
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [env])
+
+  /**
    * Put a success on the status line and schedule its own removal. Shared by
    * the request path and by the mock reset, which has no request to await but
    * should read the same way to a reviewer.
@@ -152,16 +182,15 @@ export function EmitControls({ env: envProp, onClearBoard }: EmitControlsProps) 
 
   /**
    * Run one client call with the shared in-flight guard and map its result
-   * onto the status line. Returns the result so the caller can decide whether
-   * to commit optimistic local state, which is how the pause toggle stays
-   * inert when the producer did not actually change.
+   * onto the status line. A call that settles after unmount is dropped where
+   * it lands, before any of the three outcomes can touch state.
    */
   const run = useCallback(
-    async (request: () => Promise<ClientResult>, successText: string): Promise<ClientResult | null> => {
+    async (request: () => Promise<ClientResult>, successText: string): Promise<void> => {
       cancelClearTimer()
       setInFlight(true)
       const result = await request()
-      if (!mountedRef.current) return null
+      if (!mountedRef.current) return
       setInFlight(false)
 
       switch (result.kind) {
@@ -176,7 +205,6 @@ export function EmitControls({ env: envProp, onClearBoard }: EmitControlsProps) 
           setStatus({ tone: 'disabled', text: NOT_CONFIGURED_TEXT })
           break
       }
-      return result
     },
     [announceOk, cancelClearTimer],
   )
@@ -188,40 +216,17 @@ export function EmitControls({ env: envProp, onClearBoard }: EmitControlsProps) 
     )
   }, [env, run, scenario])
 
-  // Scenario and rate post immediately on change. The local value is committed
-  // first so the control reflects what the reviewer chose even if the producer
-  // rejects it; the error line tells them it did not take.
+  // Choosing a scenario reaches nothing: the producer has no scenario to set,
+  // and the emit above carries the choice with it. The status line confirms
+  // the control was heard without claiming a request was made or succeeded.
   const handleScenarioChange = useCallback(
     (event: ChangeEvent<HTMLSelectElement>) => {
       const next = event.target.value
-      if (!isScenario(next)) return
       setScenarioState(next)
-      void run(() => setScenario(next, rate, { env }), `Scenario set to ${next} at ${rate}/s`)
+      announceOk(scenarioSelectedText(next))
     },
-    [env, rate, run],
+    [announceOk],
   )
-
-  const handleRateChange = useCallback(
-    (event: ChangeEvent<HTMLInputElement>) => {
-      const parsed = Number(event.target.value)
-      if (event.target.value.trim() === '' || !Number.isFinite(parsed)) return
-      const next = clampRate(parsed)
-      setRate(next)
-      void run(() => setScenario(scenario, next, { env }), `Scenario set to ${scenario} at ${next}/s`)
-    },
-    [env, run, scenario],
-  )
-
-  // The paused flag only flips once the producer confirms, so an error or a
-  // disabled client leaves the switch exactly where it was.
-  const handlePauseToggle = useCallback(() => {
-    const next = !paused
-    void run(() => setPaused(next, { env }), next ? 'Producer paused' : 'Producer resumed').then(
-      (result) => {
-        if (result?.kind === 'ok') setPausedState(next)
-      },
-    )
-  }, [env, paused, run])
 
   /**
    * Reset is the one control that survives a missing firehose: clearing the
@@ -268,38 +273,18 @@ export function EmitControls({ env: envProp, onClearBoard }: EmitControlsProps) 
 
         <label className="emit-controls__field">
           <span className="emit-controls__label">Scenario</span>
+          {/*
+            The producer's description rides along as the option's title, so a
+            reviewer hovering an unfamiliar id learns what it generates without
+            the row growing wide enough to print all six.
+          */}
           <select value={scenario} onChange={handleScenarioChange} disabled={disabled}>
-            {SCENARIOS.map((name) => (
-              <option key={name} value={name}>
-                {name}
+            {scenarios.map(({ id, description }) => (
+              <option key={id} value={id} title={description}>
+                {id}
               </option>
             ))}
           </select>
-        </label>
-
-        <label className="emit-controls__field">
-          <span className="emit-controls__label">Rate /s</span>
-          <input
-            type="number"
-            inputMode="numeric"
-            min={RATE_MIN}
-            max={RATE_MAX}
-            step={1}
-            value={rate}
-            onChange={handleRateChange}
-            disabled={disabled}
-          />
-        </label>
-
-        <label className="emit-controls__field emit-controls__switch">
-          <input
-            type="checkbox"
-            role="switch"
-            checked={paused}
-            onChange={handlePauseToggle}
-            disabled={disabled}
-          />
-          <span className="emit-controls__label">Pause producer</span>
         </label>
 
         <button

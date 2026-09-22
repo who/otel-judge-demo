@@ -39,14 +39,12 @@ describe('accessibility: tab order', () => {
     vi.stubEnv('VITE_FIREHOSE_BASE', FIREHOSE)
   })
 
-  it('tab order runs emit, scenario, rate, pause, reset, then the first board chip', async () => {
+  it('tab order runs emit, scenario, reset, then the first board chip', async () => {
     const user = userEvent.setup()
     render(<App />)
 
     const emit = screen.getByRole('button', { name: EMIT_LABEL })
     const scenario = screen.getByRole('combobox', { name: 'Scenario' })
-    const rate = screen.getByRole('spinbutton', { name: 'Rate /s' })
-    const pause = screen.getByRole('switch', { name: 'Pause producer' })
     // Reset is last in the control row: the destructive action is the one a
     // reviewer tabs to on purpose, never the one they land on first.
     const reset = screen.getByRole('button', { name: RESET_LABEL })
@@ -56,10 +54,6 @@ describe('accessibility: tab order', () => {
     expect(emit).toHaveFocus()
     await user.tab()
     expect(scenario).toHaveFocus()
-    await user.tab()
-    expect(rate).toHaveFocus()
-    await user.tab()
-    expect(pause).toHaveFocus()
     await user.tab()
     expect(reset).toHaveFocus()
     await user.tab()

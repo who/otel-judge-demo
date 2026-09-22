@@ -6,29 +6,27 @@ import {
   EMIT_LABEL,
   EmitControls,
   NOT_CONFIGURED_TEXT,
-  RATE_MAX,
-  RATE_MIN,
   RESET_CONFIRM_TEXT,
   RESET_LABEL,
   RESET_MOCK_TEXT,
   STATUS_CLEAR_MS,
-  clampRate,
+  scenarioSelectedText,
 } from './EmitControls'
 import { readEnv } from '../lib/env'
 import type { AppEnv } from '../lib/env'
-import { SCENARIOS, emitPackets, setPaused, setScenario } from '../lib/firehose'
+import { DEFAULT_SCENARIO, SCENARIOS, emitPackets, fetchScenarios } from '../lib/firehose'
 import type { FirehoseResult } from '../lib/firehose'
 import { RESET_PATH } from '../lib/judge'
 
-// The three request functions are mocked; the rest of the module (SCENARIOS,
-// the types) stays real so the select renders the producer's true vocabulary.
+// Both request functions are mocked; the rest of the module (SCENARIOS, the
+// default, the types) stays real so the select falls back to the producer's
+// true vocabulary whenever the listing is not the thing under test.
 vi.mock('../lib/firehose', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../lib/firehose')>()
   return {
     ...actual,
     emitPackets: vi.fn(),
-    setScenario: vi.fn(),
-    setPaused: vi.fn(),
+    fetchScenarios: vi.fn(),
   }
 })
 
@@ -55,12 +53,8 @@ function scenarioSelect() {
   return screen.getByRole('combobox', { name: 'Scenario' })
 }
 
-function rateInput() {
-  return screen.getByRole('spinbutton', { name: 'Rate /s' })
-}
-
-function pauseSwitch() {
-  return screen.getByRole('switch', { name: 'Pause producer' })
+function scenarioOptions() {
+  return screen.getAllByRole('option').map((option) => option.textContent)
 }
 
 function statusLine() {
@@ -103,14 +97,14 @@ function deferred() {
 
 beforeEach(() => {
   vi.mocked(emitPackets).mockResolvedValue(OK)
-  vi.mocked(setScenario).mockResolvedValue(OK)
-  vi.mocked(setPaused).mockResolvedValue(OK)
+  // No listing by default, which is the fallback path: a test that cares about
+  // the producer's own vocabulary says so by resolving one.
+  vi.mocked(fetchScenarios).mockResolvedValue(null)
 })
 
 afterEach(() => {
   vi.mocked(emitPackets).mockReset()
-  vi.mocked(setScenario).mockReset()
-  vi.mocked(setPaused).mockReset()
+  vi.mocked(fetchScenarios).mockReset()
   vi.unstubAllGlobals()
   vi.useRealTimers()
 })
@@ -129,13 +123,14 @@ describe('EmitControls emit', () => {
     expect(statusLine()).toHaveTextContent(/chaos/)
   })
 
-  it('emits with the selected scenario: the default is the first producer scenario', async () => {
+  it('emits with the selected scenario: the default is the demo mix', async () => {
     const user = userEvent.setup()
     render(<EmitControls env={env} />)
 
     await user.click(emitButton())
 
-    expect(emitPackets).toHaveBeenCalledWith(SCENARIOS[0], EMIT_COUNT, { env })
+    expect(emitPackets).toHaveBeenCalledWith(DEFAULT_SCENARIO, EMIT_COUNT, { env })
+    expect(DEFAULT_SCENARIO).toBe('demo_mix')
   })
 
   it('emits with the selected scenario once per press: a double click sends one request', async () => {
@@ -242,7 +237,7 @@ describe('EmitControls failure', () => {
 })
 
 describe('EmitControls disabled', () => {
-  it('renders not configured with every control disabled when no firehose base is set', async () => {
+  it('renders not configured with every producer control disabled when no base is set', async () => {
     const user = userEvent.setup()
     render(<EmitControls env={unconfiguredEnv} />)
 
@@ -250,14 +245,11 @@ describe('EmitControls disabled', () => {
     expect(statusLine()).toHaveAttribute('data-tone', 'disabled')
     expect(emitButton()).toBeDisabled()
     expect(scenarioSelect()).toBeDisabled()
-    expect(rateInput()).toBeDisabled()
-    expect(pauseSwitch()).toBeDisabled()
 
     await user.click(emitButton())
-    await user.click(pauseSwitch())
     expect(emitPackets).not.toHaveBeenCalled()
-    expect(setPaused).not.toHaveBeenCalled()
-    expect(pauseSwitch()).not.toBeChecked()
+    // The listing is not asked for either: there is no producer to ask.
+    expect(fetchScenarios).not.toHaveBeenCalled()
   })
 
   it('renders not configured when the client itself reports disabled', async () => {
@@ -271,77 +263,86 @@ describe('EmitControls disabled', () => {
     expect(statusLine()).toHaveTextContent(NOT_CONFIGURED_TEXT)
     expect(emitButton()).toBeDisabled()
     expect(scenarioSelect()).toBeDisabled()
-    expect(rateInput()).toBeDisabled()
-    expect(pauseSwitch()).toBeDisabled()
   })
 })
 
-describe('EmitControls producer settings', () => {
-  it('pause toggle calls the client with the new paused value each way', async () => {
+describe('EmitControls scenario choice', () => {
+  it('chooses a scenario without reaching the producer and carries it into the next emit', async () => {
     const user = userEvent.setup()
     render(<EmitControls env={env} />)
 
-    await user.click(pauseSwitch())
-    expect(setPaused).toHaveBeenLastCalledWith(true, { env })
-    expect(pauseSwitch()).toBeChecked()
+    await user.selectOptions(scenarioSelect(), 'chaos')
 
-    await user.click(pauseSwitch())
-    expect(setPaused).toHaveBeenLastCalledWith(false, { env })
-    expect(pauseSwitch()).not.toBeChecked()
-    expect(setPaused).toHaveBeenCalledTimes(2)
+    // Nothing is posted on the change: the producer holds no scenario to set,
+    // so the choice is local until a press sends it.
+    expect(emitPackets).not.toHaveBeenCalled()
+    expect(scenarioSelect()).toHaveValue('chaos')
+    expect(statusLine()).toHaveAttribute('data-tone', 'ok')
+    expect(statusLine()).toHaveTextContent(scenarioSelectedText('chaos'))
+
+    await user.click(emitButton())
+
+    expect(emitPackets).toHaveBeenCalledWith('chaos', EMIT_COUNT, { env })
   })
 
-  it('pause toggle stays inert when the producer rejects the change', async () => {
-    vi.mocked(setPaused).mockResolvedValue(ERROR)
+  it('emits the chosen scenario even after the producer refused the last request', async () => {
+    vi.mocked(emitPackets).mockResolvedValueOnce(ERROR).mockResolvedValueOnce(OK)
     const user = userEvent.setup()
     render(<EmitControls env={env} />)
 
-    await user.click(pauseSwitch())
-
-    expect(setPaused).toHaveBeenCalledWith(true, { env })
-    expect(pauseSwitch()).not.toBeChecked()
+    await user.click(emitButton())
     expect(statusLine()).toHaveAttribute('data-tone', 'error')
+
+    await user.selectOptions(scenarioSelect(), 'noise_storm')
+    await user.click(emitButton())
+
+    expect(emitPackets).toHaveBeenLastCalledWith('noise_storm', EMIT_COUNT, { env })
   })
 
-  it('posts the scenario immediately on change with the current rate', async () => {
+  it('renders the static vocabulary when the producer has no listing to give', async () => {
+    render(<EmitControls env={env} />)
+    await act(async () => {})
+
+    expect(fetchScenarios).toHaveBeenCalledWith({ env })
+    expect(scenarioOptions()).toEqual([...SCENARIOS])
+    expect(scenarioSelect()).toHaveValue(DEFAULT_SCENARIO)
+  })
+
+  it('replaces the static vocabulary with the producer listing, descriptions and all', async () => {
+    vi.mocked(fetchScenarios).mockResolvedValue([
+      { id: 'healthy', description: 'Service inside its objective.' },
+      { id: 'demo_mix' },
+      { id: 'brand_new' },
+    ])
     const user = userEvent.setup()
     render(<EmitControls env={env} />)
+    await act(async () => {})
 
-    await user.selectOptions(scenarioSelect(), 'latency-spike')
+    expect(scenarioOptions()).toEqual(['healthy', 'demo_mix', 'brand_new'])
+    expect(screen.getByRole('option', { name: 'healthy' })).toHaveAttribute(
+      'title',
+      'Service inside its objective.',
+    )
+    // A listing that still carries the default leaves the selection alone.
+    expect(scenarioSelect()).toHaveValue(DEFAULT_SCENARIO)
 
-    expect(setScenario).toHaveBeenCalledWith('latency-spike', Number(rateInput().getAttribute('value')), {
-      env,
-    })
+    await user.selectOptions(scenarioSelect(), 'brand_new')
+    await user.click(emitButton())
+
+    expect(emitPackets).toHaveBeenCalledWith('brand_new', EMIT_COUNT, { env })
   })
 
-  it('clamps a rate outside the bounds before posting it', async () => {
+  it('selects the first listed scenario when the producer has dropped the default', async () => {
+    vi.mocked(fetchScenarios).mockResolvedValue([{ id: 'healthy' }, { id: 'chaos' }])
+    const user = userEvent.setup()
     render(<EmitControls env={env} />)
+    await act(async () => {})
 
-    await act(async () => {
-      fireEvent.change(rateInput(), { target: { value: '500' } })
-    })
-    expect(setScenario).toHaveBeenLastCalledWith(SCENARIOS[0], RATE_MAX, { env })
-    expect(rateInput()).toHaveValue(RATE_MAX)
+    expect(scenarioSelect()).toHaveValue('healthy')
 
-    await act(async () => {
-      fireEvent.change(rateInput(), { target: { value: '0' } })
-    })
-    expect(setScenario).toHaveBeenLastCalledWith(SCENARIOS[0], RATE_MIN, { env })
-    expect(rateInput()).toHaveValue(RATE_MIN)
-  })
+    await user.click(emitButton())
 
-  it('clamps: the helper rounds and bounds without touching in-range values', () => {
-    expect(clampRate(7)).toBe(7)
-    expect(clampRate(0)).toBe(RATE_MIN)
-    expect(clampRate(-3)).toBe(RATE_MIN)
-    expect(clampRate(99)).toBe(RATE_MAX)
-    expect(clampRate(2.6)).toBe(3)
-  })
-
-  it('renders every producer scenario as a select option', () => {
-    render(<EmitControls env={env} />)
-    const options = screen.getAllByRole('option').map((option) => option.textContent)
-    expect(options).toEqual([...SCENARIOS])
+    expect(emitPackets).toHaveBeenCalledWith('healthy', EMIT_COUNT, { env })
   })
 })
 

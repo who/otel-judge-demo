@@ -1,9 +1,14 @@
 /**
  * Typed HTTP client for the otel-judge-firehose producer.
  *
- * This module only asks the producer to emit packets or to change its
- * scenario and pause state. All packet generation, fixtures and chaos logic
- * live in otel-judge-firehose; nothing here may generate a packet locally.
+ * The producer offers the demo two routes: a listing of the scenarios it
+ * registers, and an emit. It runs no continuous stream, so there is nothing
+ * here to set running, to re-rate, or to pause: a burst is asked for one call
+ * at a time and the scenario travels with that call rather than being
+ * installed beforehand.
+ *
+ * All packet generation, fixtures and chaos logic live in otel-judge-firehose;
+ * nothing here may generate a packet locally.
  *
  * Every request is unauthenticated and sent with credentials omitted. The
  * bundle is a public static site (FR3), so no credential of any kind may be
@@ -12,15 +17,33 @@
 
 import { readEnv, type AppEnv } from './env'
 
-/** Scenario vocabulary the producer understands. Rendered by the controls from this one list. */
-export const SCENARIOS = ['nominal', 'latency-spike', 'malformed', 'chaos'] as const
+/**
+ * Scenario identifiers the producer registers, in its own listing order. The
+ * controls open on this list and replace it with whatever the producer
+ * actually answers with, so a deployment that has grown a scenario since this
+ * bundle was built still offers it.
+ */
+export const SCENARIOS = [
+  'healthy',
+  'post_deploy_burn',
+  'dependency_timeouts',
+  'noise_storm',
+  'chaos',
+  'demo_mix',
+] as const
 
 export type Scenario = (typeof SCENARIOS)[number]
 
+/**
+ * The scenario a demo opens on. One emit of demo_mix spreads packets across
+ * the failure classes rather than filling a single verdict bucket, which is
+ * what a reviewer watching the board for the first time wants to see.
+ */
+export const DEFAULT_SCENARIO: Scenario = 'demo_mix'
+
 /** Producer routes, each relative to the validated firehose base. */
 export const EMIT_PATH = '/emit'
-export const SCENARIO_PATH = '/scenario'
-export const PAUSE_PATH = '/pause'
+export const SCENARIOS_PATH = '/scenarios'
 
 /** Upper bound on any single producer request before it is aborted. */
 export const FIREHOSE_TIMEOUT_MS = 8000
@@ -57,17 +80,20 @@ export interface FirehoseOptions {
 }
 
 export interface EmitRequest {
-  readonly scenario: Scenario
+  /**
+   * A registered scenario identifier. Typed as a plain string rather than as
+   * `Scenario` because the producer's listing, not this module, is the final
+   * word on what is registered; an unknown one comes back as an HTTP 400.
+   */
+  readonly scenario: string
   readonly count: number
 }
 
-export interface ScenarioRequest {
-  readonly scenario: Scenario
-  readonly ratePerSec: number
-}
-
-export interface PauseRequest {
-  readonly paused: boolean
+/** One entry of the producer's scenario listing. */
+export interface ScenarioOption {
+  readonly id: string
+  /** The producer's own description of the scenario, when it sent one. */
+  readonly description?: string
 }
 
 function truncate(text: string): string {
@@ -97,15 +123,15 @@ function describeFailure(cause: unknown, timedOut: boolean, timeoutMs: number): 
 }
 
 /**
- * POST a JSON body to one producer path. Returns disabled without issuing a
- * request when no firehose base is configured, and never throws: every
- * failure mode is folded into the FirehoseResult so a demo control can render
- * a message instead of surfacing an unhandled rejection.
+ * Issue one request to a producer path. Returns disabled without touching the
+ * network when no firehose base is configured, and never throws: every failure
+ * mode is folded into the FirehoseResult so a demo control can render a
+ * message instead of surfacing an unhandled rejection.
  */
-async function postJson(
+async function request(
   path: string,
-  payload: EmitRequest | ScenarioRequest | PauseRequest,
-  options: FirehoseOptions = {},
+  init: RequestInit,
+  options: FirehoseOptions,
 ): Promise<FirehoseResult> {
   const env = options.env ?? readEnv()
   if (env.firehoseBase === undefined) {
@@ -118,9 +144,7 @@ async function postJson(
 
   try {
     const response = await fetch(`${env.firehoseBase}${path}`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(payload),
+      ...init,
       credentials: 'omit',
       signal: controller.signal,
     })
@@ -140,9 +164,31 @@ async function postJson(
   }
 }
 
-/** Ask the producer to emit `count` packets under `scenario`. */
+function postJson(
+  path: string,
+  payload: EmitRequest,
+  options: FirehoseOptions = {},
+): Promise<FirehoseResult> {
+  return request(
+    path,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+    },
+    options,
+  )
+}
+
+/**
+ * Ask the producer to emit `count` packets under `scenario`.
+ *
+ * This is the whole of the demo's control over what lands on the board: the
+ * scenario is part of the request, so whichever one the reviewer has chosen
+ * takes effect on the next press with nothing to install first.
+ */
 export function emitPackets(
-  scenario: Scenario,
+  scenario: string,
   count: number,
   options?: FirehoseOptions,
 ): Promise<FirehoseResult> {
@@ -155,22 +201,36 @@ export function emitPackets(
   return postJson(EMIT_PATH, { scenario, count }, options)
 }
 
-/** Switch the producer's running scenario and packet rate. */
-export function setScenario(
-  scenario: Scenario,
-  ratePerSec: number,
-  options?: FirehoseOptions,
-): Promise<FirehoseResult> {
-  if (!Number.isFinite(ratePerSec) || ratePerSec < 0) {
-    return Promise.resolve({
-      kind: 'error',
-      message: `Rate per second must be a non-negative number, received ${String(ratePerSec)}`,
-    })
+/** Reads a `{ scenarios: [{ id, description }] }` body, or null for anything else. */
+function parseScenarioList(body: unknown): readonly ScenarioOption[] | null {
+  if (typeof body !== 'object' || body === null) return null
+  const { scenarios } = body as { scenarios?: unknown }
+  if (!Array.isArray(scenarios)) return null
+
+  const listed: ScenarioOption[] = []
+  for (const entry of scenarios) {
+    if (typeof entry !== 'object' || entry === null) return null
+    const { id, description } = entry as { id?: unknown; description?: unknown }
+    if (typeof id !== 'string' || id === '') return null
+    listed.push(typeof description === 'string' ? { id, description } : { id })
   }
-  return postJson(SCENARIO_PATH, { scenario, ratePerSec }, options)
+  // An empty listing is treated as no answer: a producer with no scenario to
+  // offer would leave the dropdown blank, and the static list is better.
+  return listed.length === 0 ? null : listed
 }
 
-/** Pause or resume the producer's continuous stream. */
-export function setPaused(paused: boolean, options?: FirehoseOptions): Promise<FirehoseResult> {
-  return postJson(PAUSE_PATH, { paused }, options)
+/**
+ * Ask the producer which scenarios it registers.
+ *
+ * Returns null whenever the listing cannot be had — no firehose configured, an
+ * older producer that does not serve the route, a rejected request, an
+ * unreadable answer — so the caller keeps the list it already has rather than
+ * rendering an empty choice. Asking is therefore always safe, and never a
+ * precondition for emitting.
+ */
+export async function fetchScenarios(
+  options: FirehoseOptions = {},
+): Promise<readonly ScenarioOption[] | null> {
+  const result = await request(SCENARIOS_PATH, { method: 'GET' }, options)
+  return result.kind === 'ok' ? parseScenarioList(result.body) : null
 }
