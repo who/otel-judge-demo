@@ -85,7 +85,7 @@ select {
  */
 .app-shell {
   display: grid;
-  grid-template-rows: var(--header-height) 1fr;
+  grid-template-rows: minmax(var(--header-height), auto) 1fr;
   grid-template-columns: minmax(0, 1fr) var(--inspector-width);
   grid-template-areas:
     'header header'
@@ -97,8 +97,9 @@ select {
   grid-area: header;
   display: flex;
   align-items: center;
-  gap: var(--space-4);
-  padding: 0 var(--space-6);
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  padding: var(--space-2) var(--space-6);
   background: var(--surface-raised);
   border-bottom: 1px solid var(--border);
 }
@@ -126,7 +127,7 @@ select {
 @media (max-width: 900px) {
   .app-shell {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: var(--header-height) auto auto;
+    grid-template-rows: minmax(var(--header-height), auto) auto auto;
     grid-template-areas:
       'header'
       'board'
@@ -538,4 +539,101 @@ select {
 .connection-badge[data-status='connecting'] .connection-badge__detail,
 .connection-badge[data-status='degraded'] .connection-badge__detail {
   color: inherit;
+}
+
+/*
+ * Emit controls: the producer-facing row in the header. Native button, select,
+ * number input and switch share one disabled state; the status line beneath
+ * them is the only place a result is shown, tinted by tone but always in text.
+ */
+.emit-controls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.emit-controls__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.emit-controls__emit {
+  padding: var(--space-1) var(--space-3);
+  background: var(--accent);
+  color: var(--accent-ink);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-md);
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.emit-controls__emit:hover:not(:disabled) {
+  box-shadow: var(--shadow-sm);
+}
+
+.emit-controls__emit:disabled {
+  background: var(--surface-sunken);
+  color: var(--ink-muted);
+  border-color: var(--border);
+  cursor: not-allowed;
+}
+
+.emit-controls__field {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+
+.emit-controls__label {
+  color: var(--ink-muted);
+}
+
+.emit-controls__field select,
+.emit-controls__field input[type='number'] {
+  padding: var(--space-1) var(--space-2);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+}
+
+.emit-controls__field input[type='number'] {
+  width: 4.5rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.emit-controls__field select:disabled,
+.emit-controls__field input:disabled {
+  background: var(--surface-sunken);
+  color: var(--ink-muted);
+  border-color: var(--border);
+  cursor: not-allowed;
+}
+
+.emit-controls__switch input[type='checkbox'] {
+  accent-color: var(--accent);
+}
+
+.emit-controls__status {
+  min-height: 1.25rem;
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+  overflow-wrap: anywhere;
+}
+
+.emit-controls__status[data-tone='ok'] {
+  color: var(--verdict-pass);
+}
+
+.emit-controls__status[data-tone='error'] {
+  color: var(--verdict-escalate);
+}
+
+.emit-controls__status[data-tone='disabled'] {
+  color: var(--ink-muted);
 }

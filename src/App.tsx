@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react'
 import { AppShell } from './components/AppShell'
 import { Board } from './components/Board'
 import { ConnectionBadge } from './components/ConnectionBadge'
+import { EmitControls } from './components/EmitControls'
 import { Inspector } from './components/Inspector'
 import { useBoardState } from './hooks/useBoardState'
 import { readEnv } from './lib/env'
@@ -19,7 +20,8 @@ export function App() {
 
   // Board ownership sits in the hook: mock fixture with no Worker configured,
   // live Agent state otherwise. Selection below never cares which it is; the
-  // badge is the only consumer of the status.
+  // badge is the only consumer of the status. The emit controls share the
+  // same env so they and the badge agree on which producer is configured.
   const { board, status } = useBoardState({ env })
 
   // Only the id is stored, never the packet object. The packet is re-resolved
@@ -44,6 +46,7 @@ export function App() {
       header={
         <>
           <h1>OTel Judge Demo</h1>
+          <EmitControls env={env} />
           <ConnectionBadge status={status} origin={env.apiBase} />
         </>
       }
