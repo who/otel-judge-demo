@@ -1,0 +1,80 @@
+/*
+ * Design tokens for the light-mode product demo (NFR1).
+ *
+ * Every colour a component may use lives here as a custom property on :root.
+ * Components consume the semantic names below and never hardcode a hex value,
+ * so a later polish pass can retune the palette in this one file.
+ *
+ * Palette rules: a near-white neutral surface, a near-black slate ink, and a
+ * single cool indigo accent used only for selection and focus. No orange and
+ * no beige anywhere, per the PRD non-goal against Factorio branding and
+ * news-site chrome. Text tokens hold at least 4.5:1 against the surface they
+ * sit on.
+ */
+:root {
+  /* Surfaces */
+  --surface: #fafafa;
+  --surface-raised: #ffffff;
+  --surface-sunken: #f1f3f6;
+  --border: #d9dee5;
+  --border-strong: #b7bfca;
+
+  /* Ink */
+  --ink: #1c2333;
+  --ink-muted: #5b6472;
+  --ink-inverse: #ffffff;
+
+  /* Accent: selection and focus only */
+  --accent: #4f46e5;
+  --accent-ink: #ffffff;
+  --accent-soft: #e0e7ff;
+  --focus-ring: 0 0 0 3px rgba(79, 70, 229, 0.35);
+
+  /* Pipeline stages, in flow order */
+  --stage-ingest: #475569;
+  --stage-ingest-soft: #e6eaf0;
+  --stage-jev: #0f766e;
+  --stage-jev-soft: #d8f0ec;
+  --stage-llama: #6d28d9;
+  --stage-llama-soft: #ece4fb;
+  --stage-verdict: #1d4ed8;
+  --stage-verdict-soft: #dfe8fd;
+
+  /* Llama verdict labels */
+  --verdict-pass: #166534;
+  --verdict-pass-soft: #dcf2e3;
+  --verdict-flag: #854d0e;
+  --verdict-flag-soft: #f7f0d2;
+  --verdict-escalate: #b91c1c;
+  --verdict-escalate-soft: #fbe1e1;
+
+  /* Typography: system stack, no web font request */
+  --font-sans:
+    system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif;
+  --font-mono:
+    ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-md: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.375rem;
+  --leading: 1.5;
+
+  /* Spacing and shape */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --shadow-sm: 0 1px 2px rgba(28, 35, 51, 0.06);
+  --shadow-md: 0 4px 12px rgba(28, 35, 51, 0.08);
+
+  /* Layout */
+  --header-height: 56px;
+  --inspector-width: 380px;
+  --shell-collapse: 900px;
+}
