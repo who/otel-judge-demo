@@ -23,6 +23,8 @@ const MOCK_PACKETS: readonly Packet[] = [
     receivedAt: '2026-09-21T10:00:02.000Z',
     summary: { service: 'payments', operation: 'POST /charge', durationMs: 1840, statusCode: 502 },
     jev: { normal: 0.12, latency_spike: 0.63, upstream_error: 0.25 },
+    // Scored but not yet judged, so only System One has a decision time.
+    jevLatencyMs: 14,
   },
   {
     id: 'pkt-0004',
@@ -44,8 +46,14 @@ const MOCK_PACKETS: readonly Packet[] = [
         'Jev puts 90% on a latency spike, which matches a slow downstream index rather than an outage.',
       actions: ['Check index shard health', 'Compare with the last deploy timestamp'],
     },
+    // The demo's headline packet: both stages report, and the two-orders-of-
+    // magnitude gap between them is the point of showing the timings at all.
+    jevLatencyMs: 9,
+    llamaLatencyMs: 842,
   },
   {
+    // Left without either latency on purpose: a Judge build that predates the
+    // timing fields still has to render as a complete packet.
     id: 'pkt-0006',
     stage: 'verdict',
     receivedAt: '2026-09-21T10:00:05.000Z',
@@ -70,6 +78,8 @@ const MOCK_PACKETS: readonly Packet[] = [
         'Money movement failures need a human before the retry queue drains.',
       actions: ['Page the payments on-call', 'Pause the refund retry worker', 'Open an incident'],
     },
+    jevLatencyMs: 11,
+    llamaLatencyMs: 1503,
   },
   {
     // Jev was unavailable for this packet, so Judge skipped Llama and it

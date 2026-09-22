@@ -425,6 +425,18 @@ select {
   color: var(--ink-muted);
 }
 
+/*
+ * Decision time for a stage, sitting between its heading and its result. It
+ * is deliberately quiet: the timing is supporting evidence for the verdict
+ * above it, not a headline. Tabular numerals keep the Jev and Llama figures
+ * aligned so the two are quick to compare down the rail.
+ */
+.inspector__latency {
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
 .inspector__summary {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);

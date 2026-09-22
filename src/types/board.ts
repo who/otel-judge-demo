@@ -53,6 +53,16 @@ export interface Packet {
   /** Absent until the packet has passed through the `llama` stage. */
   llama?: LlamaVerdict
   /**
+   * How long System One took to score this packet, in milliseconds, as
+   * measured and published by Judge. Optional because older Judge builds do
+   * not send it and because a stage that has not run has no timing; it is
+   * never derived on this side, so an absent value means unknown rather than
+   * zero.
+   */
+  jevLatencyMs?: number
+  /** How long System Two took to reach its verdict, on the same terms as `jevLatencyMs`. */
+  llamaLatencyMs?: number
+  /**
    * Set by Judge when System One could not score this packet. Jev being
    * unavailable ends the evaluation there: System Two never runs, so the
    * packet settles in the `jev` stage carrying neither a distribution nor a

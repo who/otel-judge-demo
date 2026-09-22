@@ -1,9 +1,13 @@
 import { render, screen, within } from '@testing-library/react'
-import { Inspector, NO_SELECTION_TEXT } from './Inspector'
+import { Inspector, LATENCY_LABEL, NO_SELECTION_TEXT } from './Inspector'
 import { AWAITING_JEV_TEXT } from './JevBars'
 import { AWAITING_VERDICT_TEXT, LLAMA_SKIPPED_TEXT } from './VerdictPanel'
 import { mockBoardState } from '../mock/boardFixture'
 import type { Packet } from '../types/board'
+
+// Matches any timing line, anchored so a section's whole text (which starts
+// with its heading) can never satisfy it. Used to assert a line is absent.
+const LATENCY_TEXT = new RegExp(`^${LATENCY_LABEL}\\b`)
 
 function fixturePacket(id: string): Packet {
   const packet = mockBoardState().packets.find((p) => p.id === id)
@@ -89,6 +93,49 @@ describe('Inspector', () => {
     expect(
       within(section).queryByRole('list', { name: 'Recommended actions' }),
     ).not.toBeInTheDocument()
+  })
+
+  it('shows each stage its own decision time when the packet carries both', () => {
+    const packet = fixturePacket('pkt-0005')
+    render(<Inspector packet={packet} />)
+
+    const jev = screen.getByRole('region', { name: 'Jev' })
+    expect(within(jev).getByText(`${LATENCY_LABEL} ${packet.jevLatencyMs} ms`)).toBeInTheDocument()
+
+    const verdict = screen.getByRole('region', { name: 'Llama verdict' })
+    expect(
+      within(verdict).getByText(`${LATENCY_LABEL} ${packet.llamaLatencyMs} ms`),
+    ).toBeInTheDocument()
+  })
+
+  it('shows no decision time at all for a packet that reported none', () => {
+    const packet = fixturePacket('pkt-0006')
+    expect(packet.jevLatencyMs).toBeUndefined()
+    expect(packet.llamaLatencyMs).toBeUndefined()
+    render(<Inspector packet={packet} />)
+
+    expect(screen.queryByText(LATENCY_TEXT)).not.toBeInTheDocument()
+    expect(screen.getByText('pass')).toHaveAttribute('data-verdict', 'pass')
+  })
+
+  it('shows only the Jev timing for a packet scored but not yet judged', () => {
+    const packet = fixturePacket('pkt-0003')
+    render(<Inspector packet={packet} />)
+
+    const jev = screen.getByRole('region', { name: 'Jev' })
+    expect(within(jev).getByText(`${LATENCY_LABEL} ${packet.jevLatencyMs} ms`)).toBeInTheDocument()
+
+    const verdict = screen.getByRole('region', { name: 'Llama verdict' })
+    expect(within(verdict).queryByText(LATENCY_TEXT)).not.toBeInTheDocument()
+  })
+
+  it('rounds a fractional decision time and hides one that is not a duration', () => {
+    const packet: Packet = { ...fixturePacket('pkt-0005'), jevLatencyMs: 12.6, llamaLatencyMs: -3 }
+    render(<Inspector packet={packet} />)
+
+    expect(screen.getByText(`${LATENCY_LABEL} 13 ms`)).toBeInTheDocument()
+    const verdict = screen.getByRole('region', { name: 'Llama verdict' })
+    expect(within(verdict).queryByText(LATENCY_TEXT)).not.toBeInTheDocument()
   })
 
   it('renders awaiting messages for both Jev and the verdict on an ingest packet', () => {

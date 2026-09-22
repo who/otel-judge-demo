@@ -72,6 +72,17 @@ function isLlamaVerdict(value: unknown): value is LlamaVerdict {
 }
 
 /**
+ * A decision time is only believable as a finite, non-negative number of
+ * milliseconds. NaN, Infinity, a negative clock skew and a numeric string are
+ * all dropped to undefined, which the inspector renders as no timing at all:
+ * showing a wrong duration would be worse than showing none.
+ */
+function latencyMs(value: unknown): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return undefined
+  return value
+}
+
+/**
  * Validate one packet from an untrusted payload. Only the two fields the board
  * needs to place a chip are enforced: a string id and a known stage. The
  * summary is defaulted rather than required so a Worker that omits it still
@@ -82,7 +93,8 @@ function isLlamaVerdict(value: unknown): value is LlamaVerdict {
  */
 function adaptPacket(value: unknown): Packet | null {
   if (!isRecord(value)) return null
-  const { id, stage, receivedAt, summary, jev, llama, jevUnavailable } = value
+  const { id, stage, receivedAt, summary, jev, llama, jevUnavailable, jevLatencyMs, llamaLatencyMs } =
+    value
   if (typeof id !== 'string' || id === '') return null
   if (!isStage(stage)) return null
 
@@ -100,6 +112,10 @@ function adaptPacket(value: unknown): Packet | null {
   }
   if (isJevDistribution(jev)) packet.jev = jev
   if (isLlamaVerdict(llama)) packet.llama = llama
+  const jevMs = latencyMs(jevLatencyMs)
+  if (jevMs !== undefined) packet.jevLatencyMs = jevMs
+  const llamaMs = latencyMs(llamaLatencyMs)
+  if (llamaMs !== undefined) packet.llamaLatencyMs = llamaMs
   // Only a literal true marks the skip. Any other value is treated as absent,
   // so a malformed payload cannot report a live packet as finished.
   if (jevUnavailable === true) packet.jevUnavailable = true

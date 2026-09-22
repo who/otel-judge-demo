@@ -104,6 +104,32 @@ describe('adaptAgentState', () => {
     expect(board?.packets[2]?.llama).toEqual({ label: 'pass', rationale: 'Fine.', actions: [] })
   })
 
+  it('keeps decision times that are real durations and drops the rest', () => {
+    const board = adaptAgentState({
+      packets: [
+        { id: 'timed', stage: 'verdict', jevLatencyMs: 9, llamaLatencyMs: 842.5 },
+        { id: 'instant', stage: 'jev', jevLatencyMs: 0 },
+        { id: 'negative', stage: 'jev', jevLatencyMs: -1 },
+        { id: 'stringly', stage: 'jev', jevLatencyMs: '12', llamaLatencyMs: Number.NaN },
+        { id: 'endless', stage: 'jev', jevLatencyMs: Number.POSITIVE_INFINITY },
+      ],
+    })
+    expect(board?.packets[0]?.jevLatencyMs).toBe(9)
+    expect(board?.packets[0]?.llamaLatencyMs).toBe(842.5)
+    expect(board?.packets[1]?.jevLatencyMs).toBe(0)
+    expect(board?.packets[2]?.jevLatencyMs).toBeUndefined()
+    expect(board?.packets[3]?.jevLatencyMs).toBeUndefined()
+    expect(board?.packets[3]?.llamaLatencyMs).toBeUndefined()
+    expect(board?.packets[4]?.jevLatencyMs).toBeUndefined()
+  })
+
+  it('adapts a packet that reports no decision times without inventing them', () => {
+    const board = adaptAgentState(validPayload)
+    expect(board?.packets[0]).not.toHaveProperty('jevLatencyMs')
+    expect(board?.packets[1]).not.toHaveProperty('jevLatencyMs')
+    expect(board?.packets[1]).not.toHaveProperty('llamaLatencyMs')
+  })
+
   it('drops malformed packets but fills a missing summary with safe defaults', () => {
     const board = adaptAgentState({ packets: [{ id: 'bare', stage: 'jev' }, { id: '', stage: 'jev' }] })
     expect(board?.packets).toHaveLength(1)
