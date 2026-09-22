@@ -1,0 +1,38 @@
+import type { Packet } from '../types/board'
+
+export interface PacketChipProps {
+  packet: Packet
+  /** Whether this chip is the board's current selection. */
+  selected: boolean
+  /** Called with the packet id on every activation, selected or not. */
+  onSelect: (id: string) => void
+}
+
+/**
+ * One packet on the board. It is a real button so focus, Enter and Space
+ * activation come from the platform rather than hand-rolled key handlers.
+ *
+ * The visible label is service, operation and duration: the triple that makes
+ * a packet identifiable at a glance. The accessible name adds the stage so a
+ * screen-reader user hears where the packet sits without walking up to the
+ * column heading. Clicking an already selected chip still calls onSelect;
+ * deselect semantics belong to the parent.
+ */
+export function PacketChip({ packet, selected, onSelect }: PacketChipProps) {
+  const { service, operation, durationMs } = packet.summary
+  return (
+    <button
+      type="button"
+      className="packet-chip"
+      data-stage={packet.stage}
+      aria-pressed={selected}
+      aria-label={`${service} ${operation} ${durationMs} ms, ${packet.stage} stage`}
+      title={`${service} ${operation}`}
+      onClick={() => onSelect(packet.id)}
+    >
+      <span className="packet-chip__service">{service}</span>
+      <span className="packet-chip__operation">{operation}</span>
+      <span className="packet-chip__duration">{durationMs} ms</span>
+    </button>
+  )
+}

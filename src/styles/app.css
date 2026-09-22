@@ -138,3 +138,173 @@ select {
     border-top: 1px solid var(--border);
   }
 }
+
+/*
+ * Board: one column per pipeline stage, in flow order. Columns share the
+ * width equally and never grow to fit a long label; chips truncate instead.
+ */
+.board {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.board__columns {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.board__unknown {
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+}
+
+.board-column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-3);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.board-column__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.board-column__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.board-column__count {
+  min-width: 1.75rem;
+  padding: 0 var(--space-2);
+  border-radius: 999px;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.board-column__empty {
+  padding: var(--space-3);
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+  text-align: center;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-md);
+}
+
+.board-column__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+.board-column__list > li {
+  min-width: 0;
+}
+
+/*
+ * Packet chip: a button carrying a stage-coloured left border. Colour is
+ * never the only signal; the column heading names the stage in text.
+ */
+.packet-chip {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'service duration'
+    'operation duration';
+  column-gap: var(--space-2);
+  width: 100%;
+  min-width: 0;
+  padding: var(--space-2) var(--space-3);
+  text-align: left;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--stage-ingest);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+}
+
+.packet-chip:hover {
+  border-color: var(--border-strong);
+}
+
+.packet-chip[aria-pressed='true'] {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.packet-chip[data-stage='ingest'] {
+  border-left-color: var(--stage-ingest);
+}
+
+.packet-chip[data-stage='jev'] {
+  border-left-color: var(--stage-jev);
+}
+
+.packet-chip[data-stage='llama'] {
+  border-left-color: var(--stage-llama);
+}
+
+.packet-chip[data-stage='verdict'] {
+  border-left-color: var(--stage-verdict);
+}
+
+.packet-chip__service,
+.packet-chip__operation {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.packet-chip__service {
+  grid-area: service;
+  font-weight: 600;
+  font-size: var(--text-sm);
+}
+
+.packet-chip__operation {
+  grid-area: operation;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+}
+
+.packet-chip__duration {
+  grid-area: duration;
+  align-self: center;
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  .board__columns {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
