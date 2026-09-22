@@ -475,3 +475,67 @@ select {
   flex-direction: column;
   gap: var(--space-1);
 }
+
+/*
+ * Connection badge: the data-source indicator in the header. The status word
+ * is always text; data-status only tints it. Live, degraded and connecting
+ * reuse the verdict tokens (pass, escalate, flag) so the palette stays one
+ * source; mock is neutral because it is a deliberate offline state, not a
+ * verdict on anything.
+ */
+.connection-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-left: auto;
+  min-width: 0;
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+}
+
+.connection-badge__label {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.connection-badge__detail {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink-muted);
+}
+
+.connection-badge__detail[data-origin] {
+  font-family: var(--font-mono);
+}
+
+.connection-badge[data-status='live'] {
+  color: var(--verdict-pass);
+  border-color: var(--verdict-pass);
+  background: var(--verdict-pass-soft);
+}
+
+.connection-badge[data-status='connecting'] {
+  color: var(--verdict-flag);
+  border-color: var(--verdict-flag);
+  background: var(--verdict-flag-soft);
+}
+
+.connection-badge[data-status='degraded'] {
+  color: var(--verdict-escalate);
+  border-color: var(--verdict-escalate);
+  background: var(--verdict-escalate-soft);
+}
+
+.connection-badge[data-status='live'] .connection-badge__detail,
+.connection-badge[data-status='connecting'] .connection-badge__detail,
+.connection-badge[data-status='degraded'] .connection-badge__detail {
+  color: inherit;
+}
