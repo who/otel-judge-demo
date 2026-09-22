@@ -1,18 +1,18 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { AppShell } from './components/AppShell'
 import { Board } from './components/Board'
 import { Inspector } from './components/Inspector'
-import { advanceMockBoard, mockBoardState } from './mock/boardFixture'
+import { useBoardState } from './hooks/useBoardState'
 
-/**
- * How often the mock board advances while no Worker is connected. The live
- * data source replaces this interval wholesale, which is why the ticking lives
- * in one effect that never touches the selection state below it.
- */
-export const MOCK_ADVANCE_MS = 2000
+// The mock advance interval now lives with the hook that owns the ticking.
+// It is re-exported so tests that drive the board by advancing timers keep a
+// single import for both the component and its cadence.
+export { MOCK_ADVANCE_MS } from './hooks/useBoardState'
 
 export function App() {
-  const [board, setBoard] = useState(mockBoardState)
+  // Board ownership sits in the hook: mock fixture with no Worker configured,
+  // live Agent state otherwise. Selection below never cares which it is.
+  const { board } = useBoardState()
 
   // Only the id is stored, never the packet object. The packet is re-resolved
   // against the current board on every render, so the inspector always shows
@@ -24,11 +24,6 @@ export function App() {
   // in order instead of racing a captured value.
   const handleSelect = useCallback((id: string) => {
     setSelectedId((current) => (current === id ? null : id))
-  }, [])
-
-  useEffect(() => {
-    const timer = setInterval(() => setBoard(advanceMockBoard), MOCK_ADVANCE_MS)
-    return () => clearInterval(timer)
   }, [])
 
   // A selected id with no matching packet resolves to null and the inspector
