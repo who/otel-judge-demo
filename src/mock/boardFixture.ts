@@ -1,5 +1,5 @@
 import { isLlamaSkipped, PACKET_STAGES } from '../types/board'
-import type { BoardState, Packet, PacketStage } from '../types/board'
+import type { BoardState, LlamaVerdict, Packet, PacketStage } from '../types/board'
 
 // Every value below is hardcoded. No Date.now(), no Math.random(), so component
 // snapshots and assertions stay stable across runs and across CI.
@@ -111,15 +111,78 @@ export function mockBoardState(): BoardState {
  * was skipped: those are finished, and walking them into the llama stage would
  * show the board waiting on a step that is never going to run. The input is
  * never mutated, which matches the immutable update the agent adapter performs.
+ *
+ * A packet that arrives at `verdict` without a judgement is given one here, in
+ * the same snapshot as the stage change. The board files a settled packet under
+ * Llama's label, so a tick that delivered a packet to `verdict` and nothing to
+ * file it under would count it off the board instead: the mock stream owes the
+ * board a verdict for every packet it settles. A verdict already on the packet
+ * is never rewritten, and a Jev-skipped packet never acquires one, because Jev
+ * failing is exactly the case where System Two never ran.
  */
 export function advanceMockBoard(state: BoardState): BoardState {
   return {
     ...state,
-    packets: state.packets.map((packet) => ({
-      ...clonePacket(packet),
-      stage: isLlamaSkipped(packet) ? packet.stage : nextStage(packet.stage),
-    })),
+    packets: state.packets.map(advancePacket),
     producer: { ...state.producer },
+  }
+}
+
+function advancePacket(packet: Packet): Packet {
+  const next = clonePacket(packet)
+  if (isLlamaSkipped(packet)) return next
+  next.stage = nextStage(packet.stage)
+  if (next.stage === 'verdict' && next.llama === undefined) next.llama = verdictFor(packet)
+  return next
+}
+
+// Thresholds the mock judgement reads the summary against. They are the demo's
+// own rules of thumb rather than anything Judge publishes, which is why they
+// live here with the fixture instead of in the shared board contract.
+const SERVER_ERROR_STATUS = 500
+const CLIENT_ERROR_STATUS = 400
+const SLOW_REQUEST_MS = 1000
+
+/**
+ * The verdict the fixture hands a packet as it settles, derived from the
+ * packet's own summary so it is the same verdict on every run and on every
+ * machine. Nothing is sampled and nothing is read from the clock: the demo
+ * asserts that two calls of the fixture are equal, and a judgement that varied
+ * between ticks would break the board's story as well as those assertions.
+ */
+function verdictFor(packet: Packet): LlamaVerdict {
+  const { service, operation, durationMs, statusCode } = packet.summary
+  if (statusCode >= SERVER_ERROR_STATUS) {
+    return {
+      label: 'escalate',
+      rationale:
+        `${service} answered ${operation} with ${statusCode}. ` +
+        'A request the service could not complete on its own side needs a human before the failure repeats.',
+      actions: [`Page the ${service} on-call`, 'Open an incident'],
+    }
+  }
+  if (statusCode >= CLIENT_ERROR_STATUS) {
+    return {
+      label: 'flag',
+      rationale:
+        `${service} rejected ${operation} with ${statusCode}. ` +
+        'One refusal is the service working as designed, so this is worth watching rather than waking anyone.',
+      actions: [`Check the ${service} rejection rate against the last hour`],
+    }
+  }
+  if (durationMs >= SLOW_REQUEST_MS) {
+    return {
+      label: 'flag',
+      rationale:
+        `${operation} took ${durationMs} ms on ${service}, far longer than this path usually costs. ` +
+        'It succeeded, so the packet is a warning about a slow dependency rather than an outage.',
+      actions: ['Compare with the last deploy timestamp'],
+    }
+  }
+  return {
+    label: 'pass',
+    rationale: `${operation} returned ${statusCode} in ${durationMs} ms on ${service}. Ordinary traffic, nothing to do.`,
+    actions: [],
   }
 }
 

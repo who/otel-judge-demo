@@ -1,4 +1,4 @@
-import { isLlamaSkipped, PACKET_STAGES } from '../types/board'
+import { columnForPacket, isLlamaSkipped, PACKET_STAGES, VERDICT_COLUMNS } from '../types/board'
 import { advanceMockBoard, mockBoardState } from './boardFixture'
 
 describe('mockBoardState', () => {
@@ -85,6 +85,58 @@ describe('advanceMockBoard', () => {
       const packet = state.packets.find((candidate) => candidate.id === skippedId)
       expect(packet?.stage).toBe('jev')
       expect(packet?.jevUnavailable).toBe(true)
+      // Jev never scored this packet, so System Two never ran: no number of
+      // ticks may put a judgement on it.
+      expect(packet?.llama).toBeUndefined()
     }
+  })
+
+  it('judges a packet in the same tick that carries it into verdict', () => {
+    const before = mockBoardState()
+    const arriving = before.packets.filter((packet) => packet.stage === 'llama')
+    expect(arriving.length).toBeGreaterThan(0)
+
+    const after = advanceMockBoard(before)
+    for (const packet of arriving) {
+      const settled = after.packets.find((candidate) => candidate.id === packet.id)
+      expect(settled?.stage).toBe('verdict')
+      expect(settled?.llama?.label).toBeDefined()
+      expect(VERDICT_COLUMNS).toContain(settled?.llama?.label)
+      expect(settled?.llama?.rationale.length).toBeGreaterThan(0)
+    }
+  })
+
+  it('leaves a verdict that already arrived exactly as it was', () => {
+    const before = mockBoardState()
+    const judged = before.packets.filter((packet) => packet.llama !== undefined)
+    expect(judged.length).toBeGreaterThan(0)
+
+    let state = before
+    for (let tick = 0; tick < PACKET_STAGES.length + 1; tick += 1) {
+      state = advanceMockBoard(state)
+      for (const packet of judged) {
+        const later = state.packets.find((candidate) => candidate.id === packet.id)
+        expect(later?.llama).toEqual(packet.llama)
+      }
+    }
+  })
+
+  it('settles every packet into a column the board can show', () => {
+    let state = mockBoardState()
+    for (let tick = 0; tick < PACKET_STAGES.length + 1; tick += 1) {
+      state = advanceMockBoard(state)
+    }
+
+    const unplaceable = state.packets.filter((packet) => columnForPacket(packet) === null)
+    expect(unplaceable).toEqual([])
+    // Every outcome bucket has something in it, which is the point of judging
+    // on arrival rather than letting the fixture pile up unlabelled packets.
+    for (const column of VERDICT_COLUMNS) {
+      expect(state.packets.some((packet) => columnForPacket(packet) === column)).toBe(true)
+    }
+  })
+
+  it('is deterministic across ticks', () => {
+    expect(advanceMockBoard(mockBoardState())).toEqual(advanceMockBoard(mockBoardState()))
   })
 })
