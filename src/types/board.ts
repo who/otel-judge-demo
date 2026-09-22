@@ -97,3 +97,47 @@ export interface BoardState {
 export function isLlamaSkipped(packet: Packet): boolean {
   return packet.jevUnavailable === true && packet.llama === undefined
 }
+
+/**
+ * The terminal outcome buckets, in the order the board shows them. They are
+ * exactly Llama's labels: a judged packet is filed under the decision Llama
+ * reached, so the board reads as an outcome tally rather than as a single pile
+ * of everything that finished.
+ */
+export const VERDICT_COLUMNS: readonly LlamaVerdictLabel[] = ['pass', 'flag', 'escalate']
+
+/**
+ * A column of the board. The three in-flight columns are named after the
+ * pipeline stage they hold; the three terminal columns are named after the
+ * verdict they hold. `verdict` is deliberately absent: it is a wire stage, not
+ * a column, and a packet that reaches it is shown under its label instead.
+ */
+export type BoardColumn = 'ingest' | 'jev' | 'llama' | LlamaVerdictLabel
+
+/** Board columns left to right: the pipeline, then the outcomes it feeds. */
+export const BOARD_COLUMNS: readonly BoardColumn[] = ['ingest', 'jev', 'llama', ...VERDICT_COLUMNS]
+
+const IN_FLIGHT_COLUMNS: readonly string[] = ['ingest', 'jev', 'llama']
+
+/**
+ * The column a packet belongs in, or null when the board cannot place it.
+ *
+ * Stage decides first, so a packet still moving through the pipeline is shown
+ * where it stands even if a verdict has already been attached to it; only a
+ * packet that has reached `verdict` is filed by label. That keeps the in-flight
+ * columns meaning exactly what they meant before the buckets existed.
+ *
+ * Two packets have no column. One whose stage is not a stage this build knows
+ * cannot be placed at all, and one that settled at `verdict` without a readable
+ * label has no bucket to go in — filing it under a guessed outcome would put a
+ * judgement on screen that Llama never made. Both are counted off the board
+ * rather than hidden, and a Jev-skipped packet is neither: it settles at `jev`
+ * and keeps that column.
+ */
+export function columnForPacket(packet: Packet): BoardColumn | null {
+  if (packet.stage !== 'verdict') {
+    return IN_FLIGHT_COLUMNS.includes(packet.stage) ? (packet.stage as BoardColumn) : null
+  }
+  const label = packet.llama?.label
+  return label !== undefined && VERDICT_COLUMNS.includes(label) ? label : null
+}

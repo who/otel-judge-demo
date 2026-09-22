@@ -152,8 +152,9 @@ select {
 }
 
 /*
- * Board: one column per pipeline stage, in flow order. Columns share the
- * width equally and never grow to fit a long label; chips truncate instead.
+ * Board: one column per pipeline stage, then one per outcome bucket, in flow
+ * order. Columns share the width equally and never grow to fit a long label;
+ * chips truncate instead.
  */
 .board {
   display: flex;
@@ -164,7 +165,7 @@ select {
 
 .board__columns {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: var(--space-4);
   align-items: start;
 }
@@ -175,8 +176,8 @@ select {
 }
 
 /*
- * First-load empty state: sits above the four empty columns and names the
- * emit control, so an idle board tells the reviewer what to do next.
+ * First-load empty state: sits above the empty columns and names the emit
+ * control, so an idle board tells the reviewer what to do next.
  */
 .board-empty {
   display: flex;
@@ -224,6 +225,23 @@ select {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/*
+ * The three outcome columns carry their verdict colour on the heading only.
+ * Colour is never the only signal: the heading names the outcome in text, and
+ * the chips inside keep the neutral stage styling they had upstream.
+ */
+.board-column[data-column='pass'] .board-column__name {
+  color: var(--verdict-pass);
+}
+
+.board-column[data-column='flag'] .board-column__name {
+  color: var(--verdict-flag);
+}
+
+.board-column[data-column='escalate'] .board-column__name {
+  color: var(--verdict-escalate);
 }
 
 .board-column__count {
@@ -384,6 +402,16 @@ select {
   color: var(--ink-muted);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+
+/*
+ * Six columns need the room. They fold to three and then to two rather than
+ * squeezing, so a chip's service and operation stay readable at every width.
+ */
+@media (max-width: 1400px) {
+  .board__columns {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 900px) {

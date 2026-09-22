@@ -9,6 +9,7 @@ import {
 } from './components/BoardEmptyState'
 import { EMIT_LABEL, RESET_LABEL } from './components/EmitControls'
 import { mockBoardState } from './mock/boardFixture'
+import { BOARD_COLUMNS } from './types/board'
 import type { BoardState } from './types/board'
 
 // Spy mode keeps the fixture real by default and lets the empty-state tests
@@ -129,8 +130,9 @@ describe('accessibility: empty state', () => {
     expect(text).toBeInTheDocument()
     expect(text).toHaveTextContent(EMIT_LABEL)
     expect(screen.queryByText(EMPTY_BOARD_UNCONFIGURED_TEXT)).not.toBeInTheDocument()
-    // The four columns still render, so the pipeline shape stays visible.
-    expect(screen.getAllByRole('heading', { level: 2 })).toHaveLength(4)
+    // Every column still renders — the three pipeline stages and the three
+    // outcome buckets — so the shape of the board stays visible while idle.
+    expect(screen.getAllByRole('heading', { level: 2 })).toHaveLength(BOARD_COLUMNS.length)
   })
 
   it('empty state explains a missing producer instead of pointing at a dead button', () => {

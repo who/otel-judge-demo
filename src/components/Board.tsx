@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef } from 'react'
 import type { FocusEvent } from 'react'
-import { PACKET_STAGES } from '../types/board'
-import type { BoardState, Packet, PacketStage } from '../types/board'
+import { BOARD_COLUMNS, columnForPacket, VERDICT_COLUMNS } from '../types/board'
+import type { BoardColumn, BoardState, Packet } from '../types/board'
 import { PacketChip } from './PacketChip'
 
 export interface BoardProps {
@@ -12,17 +12,20 @@ export interface BoardProps {
 }
 
 /**
- * The four pipeline stages as ordered columns of packet chips.
+ * The pipeline as ordered columns of packet chips: the three stages a packet
+ * moves through, then the three outcome buckets it settles into.
  *
- * Columns come from PACKET_STAGES rather than from the stages present in the
- * data, so an idle board still shows the full pipeline shape and an empty
- * stage keeps its column. Board holds no state of its own: selection lives in
- * the parent, which lets the live-state task swap the data source without
+ * Columns come from BOARD_COLUMNS rather than from the data, so an idle board
+ * still shows the full shape and an empty bucket keeps its column — a demo
+ * whose escalate column is empty is saying something, and a column that
+ * vanished would say nothing. Board holds no state of its own: selection lives
+ * in the parent, which lets the live-state task swap the data source without
  * touching anything here.
  *
- * Within a column the order is the board's own array order, except at the
- * verdict stage, which is ordered newest first so the judgement a reviewer is
- * waiting on is the one at the top.
+ * Within an in-flight column the order is the board's own array order, which
+ * reads as the pipeline filling up. The outcome buckets are ordered newest
+ * first, so the judgement a reviewer is waiting on is the one at the top of its
+ * bucket.
  *
  * A chip that advances a stage re-mounts under a different column, which
  * would drop keyboard focus on the body. The board remembers which chip was
@@ -30,12 +33,24 @@ export interface BoardProps {
  * following a packet is never thrown back to the start of the page.
  */
 export function Board({ state, selectedId, onSelect }: BoardProps) {
-  const known = new Set<string>(PACKET_STAGES)
-  const unknownCount = state.packets.filter((packet) => !known.has(packet.stage)).length
+  // One pass over the packets fills every column and counts the leftovers, so
+  // a packet the board cannot place is noticed rather than silently dropped.
+  const columns = new Map<BoardColumn, Packet[]>()
+  let unplacedCount = 0
+  for (const packet of state.packets) {
+    const column = columnForPacket(packet)
+    if (column === null) {
+      unplacedCount += 1
+      continue
+    }
+    const existing = columns.get(column)
+    if (existing === undefined) columns.set(column, [packet])
+    else existing.push(packet)
+  }
 
   const rootRef = useRef<HTMLDivElement>(null)
   const focusedIdRef = useRef<string | null>(null)
-  const stagesRef = useRef<ReadonlyMap<string, PacketStage>>(new Map())
+  const columnsRef = useRef<ReadonlyMap<string, BoardColumn>>(new Map())
 
   // Focus events bubble in React, so one pair of handlers on the root covers
   // every chip. A blur whose relatedTarget is set means focus moved somewhere
@@ -49,12 +64,16 @@ export function Board({ state, selectedId, onSelect }: BoardProps) {
   }
 
   useLayoutEffect(() => {
-    const previous = stagesRef.current
-    stagesRef.current = new Map(state.packets.map((packet) => [packet.id, packet.stage]))
+    const previous = columnsRef.current
+    const current = new Map<string, BoardColumn>()
+    for (const [column, packets] of columns) {
+      for (const packet of packets) current.set(packet.id, column)
+    }
+    columnsRef.current = current
 
     const id = focusedIdRef.current
     if (id === null) return
-    const moved = previous.get(id) !== undefined && previous.get(id) !== stagesRef.current.get(id)
+    const moved = previous.get(id) !== undefined && previous.get(id) !== current.get(id)
     if (!moved) return
 
     const active = document.activeElement
@@ -68,22 +87,19 @@ export function Board({ state, selectedId, onSelect }: BoardProps) {
   return (
     <div className="board" ref={rootRef} onFocus={handleFocus} onBlur={handleBlur}>
       <div className="board__columns">
-        {PACKET_STAGES.map((stage) => (
-          <StageColumn
-            key={stage}
-            stage={stage}
-            packets={sortPacketsForColumn(
-              stage,
-              state.packets.filter((packet) => packet.stage === stage),
-            )}
+        {BOARD_COLUMNS.map((column) => (
+          <BoardColumnSection
+            key={column}
+            column={column}
+            packets={sortPacketsForColumn(column, columns.get(column) ?? [])}
             selectedId={selectedId}
             onSelect={onSelect}
           />
         ))}
       </div>
-      {unknownCount > 0 && (
+      {unplacedCount > 0 && (
         <p className="board__unknown" role="status">
-          {unknownCount} {unknownCount === 1 ? 'packet' : 'packets'} with an unknown stage
+          {unplacedCount} {unplacedCount === 1 ? 'packet' : 'packets'} the board cannot place
         </p>
       )}
     </div>
@@ -105,16 +121,21 @@ function cssEscape(value: string): string {
 /**
  * The packets of one column in the order that column should show them.
  *
- * Only the verdict column is ordered. The three upstream columns keep the
- * order Judge published them in, which reads as the pipeline filling up, and
- * every packet there leaves for the next stage shortly anyway. Verdict is the
- * terminal stage, so it only ever grows: without an order of its own the newest
- * judgement lands wherever it happens to sit in the array, which is the one
- * chip a reviewer is actually waiting for.
+ * Only the outcome buckets are ordered. The three in-flight columns keep the
+ * order Judge published them in, and every packet there leaves for the next
+ * stage shortly anyway. A bucket is terminal, so it only ever grows: without an
+ * order of its own the newest judgement lands wherever it happens to sit in the
+ * array, which is the one chip a reviewer is actually waiting for. The sort
+ * runs per bucket, so a fresh pass does not push the escalate a reviewer is
+ * reading down its own column.
  */
-function sortPacketsForColumn(stage: PacketStage, packets: Packet[]): Packet[] {
-  if (stage !== 'verdict') return packets
+function sortPacketsForColumn(column: BoardColumn, packets: Packet[]): Packet[] {
+  if (!isVerdictColumn(column)) return packets
   return [...packets].sort(newestFirst)
+}
+
+function isVerdictColumn(column: BoardColumn): boolean {
+  return (VERDICT_COLUMNS as readonly string[]).includes(column)
 }
 
 /**
@@ -148,19 +169,19 @@ function receivedAtMs(packet: Packet): number | undefined {
   return Number.isNaN(parsed) ? undefined : parsed
 }
 
-interface StageColumnProps {
-  stage: PacketStage
+interface BoardColumnSectionProps {
+  column: BoardColumn
   packets: Packet[]
   selectedId: string | null
   onSelect: (id: string) => void
 }
 
-function StageColumn({ stage, packets, selectedId, onSelect }: StageColumnProps) {
-  const headingId = `board-stage-${stage}`
+function BoardColumnSection({ column, packets, selectedId, onSelect }: BoardColumnSectionProps) {
+  const headingId = `board-column-${column}`
   return (
-    <section className="board-column" data-stage={stage} aria-labelledby={headingId}>
+    <section className="board-column" data-column={column} aria-labelledby={headingId}>
       <h2 id={headingId} className="board-column__header">
-        <span className="board-column__name">{stage}</span>
+        <span className="board-column__name">{column}</span>
         <span className="board-column__count" aria-label={`${packets.length} packets`}>
           {packets.length}
         </span>
