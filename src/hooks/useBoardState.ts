@@ -32,7 +32,17 @@ export type ConnectionStatus = 'connecting' | 'live' | 'degraded' | 'mock'
 export interface BoardStateResult {
   board: BoardState
   status: ConnectionStatus
+  /**
+   * Drops every packet from the board held here. This is the mock board's
+   * reset and nothing else: in live mode the Worker owns the state, so a
+   * reset is asked of it and arrives back as an ordinary state push rather
+   * than being faked on screen.
+   */
+  clearBoard: () => void
 }
+
+/** Reset outside mock mode belongs to the Worker; nothing is cleared locally. */
+const NO_LOCAL_CLEAR = () => {}
 
 export interface UseBoardStateOptions {
   /** Validated public config. Defaults to reading import.meta.env once on mount. */
@@ -208,7 +218,7 @@ export function useBoardState(options: UseBoardStateOptions = {}): BoardStateRes
 /** A board that never changes, for the path where no connection can be built. */
 function useStaticFixture(status: ConnectionStatus): BoardStateResult {
   const [board] = useState(mockBoardState)
-  return { board, status }
+  return { board, status, clearBoard: NO_LOCAL_CLEAR }
 }
 
 function useMockBoard(): BoardStateResult {
@@ -219,7 +229,14 @@ function useMockBoard(): BoardStateResult {
     return () => clearInterval(timer)
   }, [])
 
-  return { board, status: 'mock' }
+  // Only the packets go. The producer block and the timestamp describe the
+  // stream rather than its contents, and the interval keeps running, so the
+  // board stays empty until something new arrives instead of freezing.
+  const clearBoard = useCallback(() => {
+    setBoard((current) => ({ ...current, packets: [] }))
+  }, [])
+
+  return { board, status: 'mock', clearBoard }
 }
 
 function useLiveBoard(host: string): BoardStateResult {
@@ -275,5 +292,5 @@ function useLiveBoard(host: string): BoardStateResult {
     onClose: handleClose,
   })
 
-  return { board, status }
+  return { board, status, clearBoard: NO_LOCAL_CLEAR }
 }

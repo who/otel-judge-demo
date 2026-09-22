@@ -7,7 +7,7 @@ import {
   EMPTY_BOARD_TEXT,
   EMPTY_BOARD_UNCONFIGURED_TEXT,
 } from './components/BoardEmptyState'
-import { EMIT_LABEL } from './components/EmitControls'
+import { EMIT_LABEL, RESET_LABEL } from './components/EmitControls'
 import { mockBoardState } from './mock/boardFixture'
 import type { BoardState } from './types/board'
 
@@ -38,7 +38,7 @@ describe('accessibility: tab order', () => {
     vi.stubEnv('VITE_FIREHOSE_BASE', FIREHOSE)
   })
 
-  it('tab order runs emit, scenario, rate, pause, then the first board chip', async () => {
+  it('tab order runs emit, scenario, rate, pause, reset, then the first board chip', async () => {
     const user = userEvent.setup()
     render(<App />)
 
@@ -46,6 +46,9 @@ describe('accessibility: tab order', () => {
     const scenario = screen.getByRole('combobox', { name: 'Scenario' })
     const rate = screen.getByRole('spinbutton', { name: 'Rate /s' })
     const pause = screen.getByRole('switch', { name: 'Pause producer' })
+    // Reset is last in the control row: the destructive action is the one a
+    // reviewer tabs to on purpose, never the one they land on first.
+    const reset = screen.getByRole('button', { name: RESET_LABEL })
     const firstChip = screen.getByRole('button', { name: /^checkout POST \/cart\/items 42 ms, ingest stage/ })
 
     await user.tab()
@@ -57,6 +60,8 @@ describe('accessibility: tab order', () => {
     await user.tab()
     expect(pause).toHaveFocus()
     await user.tab()
+    expect(reset).toHaveFocus()
+    await user.tab()
     expect(firstChip).toHaveFocus()
   })
 
@@ -66,10 +71,14 @@ describe('accessibility: tab order', () => {
     const badge = screen.getAllByRole('status').find((el) => el.classList.contains('connection-badge'))
     if (!badge) throw new Error('connection badge not rendered')
     const emit = screen.getByRole('button', { name: EMIT_LABEL })
+    // Reset carries its own name rather than extending the emit button's.
+    const reset = screen.getByRole('button', { name: RESET_LABEL })
     const board = screen.getByRole('main')
     const inspector = screen.getByRole('complementary', { name: 'Inspector' })
 
     expect(precedes(badge, emit)).toBe(true)
+    expect(precedes(emit, reset)).toBe(true)
+    expect(precedes(reset, board)).toBe(true)
     expect(precedes(emit, board)).toBe(true)
     expect(precedes(board, inspector)).toBe(true)
   })

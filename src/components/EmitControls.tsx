@@ -4,6 +4,8 @@ import { readEnv } from '../lib/env'
 import type { AppEnv } from '../lib/env'
 import { SCENARIOS, emitPackets, setPaused, setScenario } from '../lib/firehose'
 import type { FirehoseResult, Scenario } from '../lib/firehose'
+import { resetBoard } from '../lib/judge'
+import type { JudgeResult } from '../lib/judge'
 
 /**
  * Packets requested per emit press. Enough to visibly populate the ingest
@@ -31,6 +33,24 @@ export const EMIT_LABEL = 'Emit via firehose'
 /** Shown in place of a result whenever no firehose base is configured. */
 export const NOT_CONFIGURED_TEXT = 'Firehose not configured'
 
+/**
+ * The reset control is deliberately plain-spoken: it drops every packet the
+ * board is holding, which during a demo is a thing you only want to do on
+ * purpose. The name says "board" so it cannot be misread as resetting the
+ * producer's scenario or rate.
+ */
+export const RESET_LABEL = 'Reset board'
+
+/** Copy of the native confirm that guards the reset. */
+export const RESET_CONFIRM_TEXT =
+  'Reset the board? Every packet on it is dropped and this cannot be undone.'
+
+/** Confirmation shown once the Judge accepts a reset. */
+export const RESET_LIVE_TEXT = 'Board reset requested from the Judge'
+
+/** Confirmation shown once the local mock board is cleared. */
+export const RESET_MOCK_TEXT = 'Mock board cleared'
+
 export type StatusTone = 'ok' | 'error' | 'disabled'
 
 export interface StatusMessage {
@@ -45,7 +65,16 @@ export interface EmitControlsProps {
    * reading import.meta.env once on mount.
    */
   env?: AppEnv
+  /**
+   * Empties the board the hook is holding. Only called in mock mode, where
+   * the board on screen is a local fixture and there is no Worker to ask;
+   * a live reset goes to the Judge and arrives back as a state push.
+   */
+  onClearBoard?: () => void
 }
+
+/** Either client's result. The two shapes match so one status line renders both. */
+type ClientResult = FirehoseResult | JudgeResult
 
 /** Clamp a requested rate into the producer's accepted range. */
 export function clampRate(value: number): number {
@@ -69,7 +98,7 @@ function isScenario(value: string): value is Scenario {
  * missing firehose base leaves the controls disabled with an explanation
  * rather than removing them from the page.
  */
-export function EmitControls({ env: envProp }: EmitControlsProps) {
+export function EmitControls({ env: envProp, onClearBoard }: EmitControlsProps) {
   const [env] = useState<AppEnv>(() => envProp ?? readEnv())
 
   // Configured is state rather than derived from env alone: a client call that
@@ -105,13 +134,30 @@ export function EmitControls({ env: envProp }: EmitControlsProps) {
   }, [cancelClearTimer])
 
   /**
+   * Put a success on the status line and schedule its own removal. Shared by
+   * the request path and by the mock reset, which has no request to await but
+   * should read the same way to a reviewer.
+   */
+  const announceOk = useCallback(
+    (text: string) => {
+      cancelClearTimer()
+      setStatus({ tone: 'ok', text })
+      clearTimerRef.current = setTimeout(() => {
+        clearTimerRef.current = null
+        if (mountedRef.current) setStatus(null)
+      }, STATUS_CLEAR_MS)
+    },
+    [cancelClearTimer],
+  )
+
+  /**
    * Run one client call with the shared in-flight guard and map its result
    * onto the status line. Returns the result so the caller can decide whether
    * to commit optimistic local state, which is how the pause toggle stays
    * inert when the producer did not actually change.
    */
   const run = useCallback(
-    async (request: () => Promise<FirehoseResult>, successText: string): Promise<FirehoseResult | null> => {
+    async (request: () => Promise<ClientResult>, successText: string): Promise<ClientResult | null> => {
       cancelClearTimer()
       setInFlight(true)
       const result = await request()
@@ -120,11 +166,7 @@ export function EmitControls({ env: envProp }: EmitControlsProps) {
 
       switch (result.kind) {
         case 'ok':
-          setStatus({ tone: 'ok', text: successText })
-          clearTimerRef.current = setTimeout(() => {
-            clearTimerRef.current = null
-            if (mountedRef.current) setStatus(null)
-          }, STATUS_CLEAR_MS)
+          announceOk(successText)
           break
         case 'error':
           setStatus({ tone: 'error', text: result.message })
@@ -136,7 +178,7 @@ export function EmitControls({ env: envProp }: EmitControlsProps) {
       }
       return result
     },
-    [cancelClearTimer],
+    [announceOk, cancelClearTimer],
   )
 
   const handleEmit = useCallback(() => {
@@ -180,6 +222,34 @@ export function EmitControls({ env: envProp }: EmitControlsProps) {
       },
     )
   }, [env, paused, run])
+
+  /**
+   * Reset is the one control that survives a missing firehose: clearing the
+   * board has nothing to do with the producer. It is unavailable only while
+   * another request is settling, or when the page claims to be live without a
+   * Worker to send the reset to.
+   */
+  const resettable = env.mode !== 'live' || env.apiBase !== undefined
+  const resetDisabled = !resettable || inFlight
+
+  /**
+   * The confirm is native and blocking on purpose: a reviewer mid-demo gets
+   * one unmissable question, and Cancel leaves both the Judge and the board
+   * untouched. Mock mode never reaches the network, because the packets on
+   * screen were never on a Worker to begin with.
+   */
+  const handleReset = useCallback(() => {
+    if (resetDisabled) return
+    if (!window.confirm(RESET_CONFIRM_TEXT)) return
+    if (env.mode !== 'live') {
+      onClearBoard?.()
+      announceOk(RESET_MOCK_TEXT)
+      return
+    }
+    // A live reset cannot come back disabled: the button is already inert
+    // without an apiBase, which is the only case the client refuses.
+    void run(() => resetBoard({ env }), RESET_LIVE_TEXT)
+  }, [announceOk, env, onClearBoard, resetDisabled, run])
 
   const disabled = !configured || inFlight
 
@@ -231,6 +301,16 @@ export function EmitControls({ env: envProp }: EmitControlsProps) {
           />
           <span className="emit-controls__label">Pause producer</span>
         </label>
+
+        <button
+          type="button"
+          className="emit-controls__reset"
+          onClick={handleReset}
+          disabled={resetDisabled}
+          aria-busy={inFlight ? 'true' : undefined}
+        >
+          {RESET_LABEL}
+        </button>
       </div>
 
       <p

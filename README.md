@@ -33,7 +33,7 @@ Both values are public origins. Neither is a secret.
 
 | Name | Public? | Purpose | When unset |
 | --- | --- | --- | --- |
-| `VITE_API_BASE` | Yes | Origin of the Judge Worker (Cloudflare Agents SDK). The board subscribes to the `judge-agent` Agent, instance `board`, at this host. | The board runs in mock mode. |
+| `VITE_API_BASE` | Yes | Origin of the Judge Worker (Cloudflare Agents SDK). The board subscribes to the `judge-agent` Agent, instance `board`, at this host, and the reset control POSTs to `/reset` under it. | The board runs in mock mode, where reset clears the local fixture instead. |
 | `VITE_FIREHOSE_BASE` | Yes | Origin of the `otel-judge-firehose` producer. The emit, scenario and pause controls POST to `/emit`, `/scenario` and `/pause` under this origin. | The controls report that the producer is not configured and issue no requests. |
 
 Both names are read by `readEnv()` in `src/lib/env.ts` and injected at build

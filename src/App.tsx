@@ -23,8 +23,9 @@ export function App() {
   // live Agent state otherwise. Selection below never cares which it is; the
   // badge and the empty state are the only consumers of the status. The emit
   // controls share the same env so they and the badge agree on which producer
-  // is configured.
-  const { board, status } = useBoardState({ env })
+  // is configured, and the reset control borrows the hook's clear so a mock
+  // board empties in the one place that owns it.
+  const { board, status, clearBoard } = useBoardState({ env })
 
   // Only the id is stored, never the packet object. The packet is re-resolved
   // against the current board on every render, so the inspector always shows
@@ -53,7 +54,7 @@ export function App() {
         <>
           <h1>OTel Judge Demo</h1>
           <ConnectionBadge status={status} origin={env.apiBase} />
-          <EmitControls env={env} />
+          <EmitControls env={env} onClearBoard={clearBoard} />
         </>
       }
       board={

@@ -195,6 +195,42 @@ describe('useBoardState', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
+  it('mock mode empties the board on reset and keeps ticking from empty', () => {
+    const { result } = renderHook(() => useBoardState({ env: MOCK_ENV }))
+    expect(result.current.board.packets.length).toBeGreaterThan(0)
+
+    act(() => {
+      result.current.clearBoard()
+    })
+    expect(result.current.board.packets).toEqual([])
+    // The producer block describes the stream rather than its contents, so a
+    // reset leaves the scenario and rate exactly where they were.
+    expect(result.current.board.producer).toEqual(mockBoardState().producer)
+
+    // The interval is still running: an emptied board stays empty instead of
+    // freezing, which is what a cleared demo board should look like.
+    act(() => {
+      vi.advanceTimersByTime(MOCK_ADVANCE_MS)
+    })
+    expect(result.current.board.packets).toEqual([])
+  })
+
+  it('live mode never empties the board locally: the Worker owns the reset', () => {
+    const { result } = renderHook(() => useBoardState({ env: LIVE_ENV }))
+    act(() => {
+      captured.options?.onStateUpdate?.(validPayload, 'server')
+    })
+    const pushed = result.current.board
+
+    act(() => {
+      result.current.clearBoard()
+    })
+
+    expect(result.current.board).toBe(pushed)
+    expect(result.current.board.packets).toHaveLength(2)
+    expect(result.current.status).toBe('live')
+  })
+
   it('mock mode is chosen whenever no Worker URL is configured, even if mode says live', () => {
     const { result } = renderHook(() => useBoardState({ env: { ...LIVE_ENV, apiBase: undefined } }))
     expect(result.current.status).toBe('mock')

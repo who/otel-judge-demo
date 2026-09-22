@@ -669,6 +669,34 @@ select {
   cursor: not-allowed;
 }
 
+/*
+ * Reset is secondary to Emit: same shape and height so the row stays even,
+ * outlined rather than filled so the destructive control never reads as the
+ * one to press. The boundary uses the strong border token, which holds the
+ * 3:1 non-text contrast the rest of the controls are held to.
+ */
+.emit-controls__reset {
+  padding: var(--space-1) var(--space-3);
+  background: var(--surface-raised);
+  color: var(--ink);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.emit-controls__reset:hover:not(:disabled) {
+  background: var(--surface-sunken);
+}
+
+.emit-controls__reset:disabled {
+  background: var(--surface-sunken);
+  color: var(--ink-muted);
+  border-color: var(--border);
+  cursor: not-allowed;
+}
+
 .emit-controls__field {
   display: inline-flex;
   align-items: center;

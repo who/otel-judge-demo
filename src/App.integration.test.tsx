@@ -2,6 +2,8 @@ import { act, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, vi } from 'vitest'
 import { App, MOCK_ADVANCE_MS } from './App'
+import { EMPTY_BOARD_TEXT } from './components/BoardEmptyState'
+import { RESET_LABEL } from './components/EmitControls'
 import { NO_SELECTION_TEXT } from './components/Inspector'
 import { AWAITING_VERDICT_TEXT } from './components/VerdictPanel'
 import { advanceMockBoard, mockBoardState } from './mock/boardFixture'
@@ -45,6 +47,7 @@ describe('App selection', () => {
 
   afterEach(() => {
     vi.mocked(advanceMockBoard).mockReset()
+    vi.unstubAllGlobals()
     vi.useRealTimers()
   })
 
@@ -147,6 +150,34 @@ describe('App selection', () => {
 
     expect(screen.queryAllByRole('button', { pressed: true })).toHaveLength(0)
     expect(screen.getByText(NO_SELECTION_TEXT)).toBeInTheDocument()
+  })
+
+  it('reset clears every chip once the confirm is accepted', async () => {
+    const confirmSpy = vi.fn(() => true)
+    vi.stubGlobal('confirm', confirmSpy)
+    const { user } = setup()
+    await user.click(screen.getByRole('button', { name: SEARCH_CHIP }))
+    expect(inspectorSummary()).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: RESET_LABEL }))
+
+    expect(confirmSpy).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole('button', { name: SEARCH_CHIP })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: PAYMENTS_CHIP })).not.toBeInTheDocument()
+    // An empty board is the empty state plus a selection that resolves to
+    // nothing, not a blank page with a stale inspector.
+    expect(screen.getByText(EMPTY_BOARD_TEXT)).toBeInTheDocument()
+    expect(screen.getByText(NO_SELECTION_TEXT)).toBeInTheDocument()
+  })
+
+  it('reset leaves the board alone when the confirm is declined', async () => {
+    vi.stubGlobal('confirm', vi.fn(() => false))
+    const { user } = setup()
+
+    await user.click(screen.getByRole('button', { name: RESET_LABEL }))
+
+    expect(screen.getByRole('button', { name: SEARCH_CHIP })).toBeInTheDocument()
+    expect(screen.queryByText(EMPTY_BOARD_TEXT)).not.toBeInTheDocument()
   })
 
   it('stops advancing the board once unmounted', () => {
