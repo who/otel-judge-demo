@@ -288,7 +288,7 @@ select {
   grid-template-areas:
     'service duration'
     'operation duration'
-    'badge badge';
+    'badges badges';
   column-gap: var(--space-2);
   width: 100%;
   min-width: 0;
@@ -378,21 +378,49 @@ select {
 }
 
 /*
- * Skipped badge: an outlined word rather than a colour, so the "this packet is
- * finished" signal survives greyscale and sits below the chip's two text rows.
- * The row is empty and therefore zero-height on every other chip.
+ * Badge row: it holds the skipped word, Jev's leading label, or nothing at all,
+ * and is rendered only when there is something to put in it, so the row costs
+ * no height on the chips that carry neither.
+ */
+.packet-chip__badges {
+  grid-area: badges;
+  display: flex;
+  justify-self: start;
+  min-width: 0;
+  margin-top: var(--space-1);
+  column-gap: var(--space-1);
+}
+
+/*
+ * A badge is an outlined word rather than a colour, so a "this packet is
+ * finished" signal survives greyscale. A label longer than the chip is clipped
+ * rather than allowed to widen the column; the title attribute and the chip's
+ * accessible name still carry it in full.
  */
 .packet-chip__badge {
-  grid-area: badge;
-  justify-self: start;
-  margin-top: var(--space-1);
+  min-width: 0;
   padding: 0 var(--space-2);
+  overflow: hidden;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
   font-size: var(--text-xs);
   letter-spacing: 0.04em;
   text-transform: uppercase;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   color: var(--ink-muted);
+}
+
+/*
+ * Jev's label is secondary to the bucket the chip already sits in, so it reads
+ * as a quoted model output: dashed outline, monospaced, and left in the casing
+ * Jev published rather than shouted in capitals like the skipped word.
+ */
+.packet-chip__badge--jev {
+  border-style: dashed;
+  font-family: var(--font-mono);
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 .packet-chip__duration {
