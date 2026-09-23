@@ -7,7 +7,7 @@
  */
 
 /** Name of the Agent class exposed by the Judge Worker. */
-export const AGENT_NAME = 'judge-agent'
+export const AGENT_NAME = 'otel-judge-agent'
 
 /** Instance name the board connects to on that Agent. */
 export const AGENT_INSTANCE = 'board'

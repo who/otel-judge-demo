@@ -260,7 +260,7 @@ describe('useBoardState', () => {
     expect(result.current.board).toEqual(mockBoardState())
     expect(captured.options).toMatchObject({
       host: 'https://judge.example.workers.dev',
-      agent: 'judge-agent',
+      agent: 'otel-judge-agent',
       name: 'board',
     })
   })

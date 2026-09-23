@@ -65,7 +65,7 @@ describe('readEnv', () => {
 
 describe('agent identity', () => {
   it('pins the Agent name and instance', () => {
-    expect(AGENT_NAME).toBe('judge-agent')
+    expect(AGENT_NAME).toBe('otel-judge-agent')
     expect(AGENT_INSTANCE).toBe('board')
   })
 })
