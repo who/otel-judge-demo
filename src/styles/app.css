@@ -356,6 +356,54 @@ select {
   border-left-color: var(--stage-verdict);
 }
 
+/*
+ * A chip still waiting on a judge is wrapped in the vendored ActivityCard,
+ * which traces a purple pulse around it. That component sizes itself as a card
+ * and styles its own boxes inline, taking no class or style prop, so the only
+ * way to fit it to a chip is to override those declarations from here — hence
+ * the !important flags, which are load-bearing rather than shortcuts. The
+ * colour is not among them: it is passed to the component as a prop, because
+ * the pulse is drawn from a colour parsed in JavaScript.
+ *
+ * The 2px gutter is what the pulse is drawn in. The card's border layer spans
+ * the padding box, so padding here puts the trace around the chip instead of
+ * on top of its own border and its selected outline.
+ */
+.packet-chip-activity > div {
+  width: 100% !important;
+  height: auto !important;
+  padding: 2px !important;
+  /* The card scales itself on hover, which would jog every chip below it. */
+  transform: none !important;
+  cursor: auto !important;
+}
+
+.packet-chip-activity > div > div:last-child {
+  height: auto !important;
+  /* The chip brings its own surface; the card's grey wash would tint it. */
+  background-color: transparent !important;
+}
+
+/*
+ * The card rounds its corners like a card. A chip's are tighter, so the ring and
+ * the box it traces are re-rounded to the chip's radius plus that 2px gutter,
+ * and the trace follows the corner it is drawn around.
+ */
+.packet-chip-activity > div,
+.packet-chip-activity > div > div {
+  border-radius: calc(var(--radius-md) + 2px) !important;
+}
+
+/*
+ * A visitor who asked for less motion still gets the purple ring, because it
+ * says which packets are being judged, but it stops travelling.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .packet-chip-activity > div > div {
+    animation-play-state: paused !important;
+  }
+}
+
 .packet-chip__service,
 .packet-chip__operation {
   min-width: 0;

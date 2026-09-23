@@ -1,5 +1,6 @@
 import { columnForPacket, isLlamaSkipped, VERDICT_COLUMNS } from '../types/board'
 import type { JevDistribution, Packet } from '../types/board'
+import ActivityCard from '../vendor/ActivityCard/ActivityCard'
 
 export interface PacketChipProps {
   packet: Packet
@@ -50,6 +51,28 @@ function isVerdictColumn(packet: Packet): boolean {
 }
 
 /**
+ * The violet the activity border traces, as ActivityCard's own purple example
+ * sets it. It is a literal rather than a token because the border is drawn in
+ * JavaScript from a parsed colour, and a `var(--...)` reference handed to that
+ * parser reads as black.
+ */
+export const ACTIVITY_BORDER_COLOR = '#8b5cf6'
+
+/**
+ * True while one of the two judges still owes this packet an answer.
+ *
+ * Waiting is the `jev` and `llama` stages and nothing else: `ingest` has not
+ * been handed to a judge yet, and a packet filed under an outcome has its
+ * answer. The one chip those two stages get wrong on their own is a packet
+ * parked in the jev column because System One was unavailable — it is settled
+ * there for good, so the skip is what decides, not the stage it stopped at.
+ */
+function isWaiting(packet: Packet): boolean {
+  if (isLlamaSkipped(packet)) return false
+  return packet.stage === 'jev' || packet.stage === 'llama'
+}
+
+/**
  * One packet on the board. It is a real button so focus, Enter and Space
  * activation come from the platform rather than hand-rolled key handlers.
  *
@@ -82,7 +105,7 @@ export function PacketChip({ packet, selected, onSelect }: PacketChipProps) {
     ...(jevTop === undefined ? [] : [`${JEV_BADGE_PREFIX} ${jevTop}`]),
     ...(skipped ? [SKIPPED_BADGE_LABEL] : []),
   ]
-  return (
+  const chip = (
     <button
       type="button"
       className="packet-chip"
@@ -110,5 +133,21 @@ export function PacketChip({ packet, selected, onSelect }: PacketChipProps) {
         </span>
       )}
     </button>
+  )
+
+  // A settled chip is the bare button, with no wrapper element around it at
+  // all: nothing to animate, and nothing extra between the column's list item
+  // and the focusable button the board hands focus back to.
+  if (!isWaiting(packet)) return chip
+
+  // The wrapper exists for the stylesheet. ActivityCard sizes its own box
+  // inline at a card's dimensions and accepts neither a class nor a style, so
+  // the chip's width is imposed from CSS through this element.
+  return (
+    <div className="packet-chip-activity">
+      <ActivityCard active color={ACTIVITY_BORDER_COLOR}>
+        {chip}
+      </ActivityCard>
+    </div>
   )
 }

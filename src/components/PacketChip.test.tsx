@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import { vi } from 'vitest'
-import { JEV_BADGE_PREFIX, PacketChip, SKIPPED_BADGE_TEXT, topJevLabel } from './PacketChip'
+import { ACTIVITY_BORDER_COLOR, JEV_BADGE_PREFIX, PacketChip, SKIPPED_BADGE_TEXT, topJevLabel } from './PacketChip'
 import type { LlamaVerdictLabel, Packet } from '../types/board'
 
 function packet(overrides: Partial<Packet> = {}): Packet {
@@ -22,10 +22,29 @@ function judged(label: LlamaVerdictLabel, overrides: Partial<Packet> = {}): Pack
   })
 }
 
-function renderChip(subject: Packet) {
-  render(<PacketChip packet={subject} selected={false} onSelect={vi.fn()} />)
+/**
+ * The ActivityCard layer tracing this chip, or null when nothing wraps it.
+ *
+ * It is found by the animation it runs rather than by a class of this demo's
+ * own, so a chip that lost the vendored border and kept the wrapper reads as
+ * untraced here instead of passing on the wrapper alone.
+ */
+function activityBorder(chip: HTMLElement): HTMLElement | null {
+  const wrapper = chip.closest('.packet-chip-activity')
+  return wrapper === null ? null : wrapper.querySelector<HTMLElement>('[style*="borderTrace"]')
+}
+
+/** A hex colour as the border gradient spells it out, so the two stay tied. */
+function gradientRgb(hex: string): string {
+  const channels = Number.parseInt(hex.slice(1), 16)
+  return `rgba(${(channels >> 16) & 255}, ${(channels >> 8) & 255}, ${channels & 255}`
+}
+
+function renderChip(subject: Packet, selected = false) {
+  const onSelect = vi.fn()
+  render(<PacketChip packet={subject} selected={selected} onSelect={onSelect} />)
   const chip = screen.getByRole('button')
-  return { chip, badge: chip.querySelector('[data-jev-top]') }
+  return { chip, badge: chip.querySelector('[data-jev-top]'), activity: activityBorder(chip), onSelect }
 }
 
 describe('topJevLabel', () => {
@@ -101,5 +120,55 @@ describe('PacketChip', () => {
     const { badge } = renderChip(judged('escalate', { jev: { [label]: 0.8, normal: 0.2 } }))
 
     expect(badge).toHaveAttribute('title', label)
+  })
+})
+
+describe('PacketChip activity border', () => {
+  it('traces a purple pulse around a chip Jev is still scoring', () => {
+    const { activity } = renderChip(packet({ stage: 'jev' }))
+
+    expect(activity).not.toBeNull()
+    expect(activity?.getAttribute('style')).toContain(gradientRgb(ACTIVITY_BORDER_COLOR))
+  })
+
+  it('traces the same pulse around a chip waiting on Llama', () => {
+    const { activity } = renderChip(packet({ stage: 'llama' }))
+
+    expect(activity).not.toBeNull()
+    expect(activity?.getAttribute('style')).toContain(gradientRgb(ACTIVITY_BORDER_COLOR))
+  })
+
+  it('leaves a chip that no judge has picked up yet untraced', () => {
+    expect(renderChip(packet({ stage: 'ingest' })).activity).toBeNull()
+  })
+
+  it.each(['pass', 'flag', 'escalate'] as const)('leaves a chip settled in the %s bucket untraced', (label) => {
+    expect(renderChip(judged(label)).activity).toBeNull()
+  })
+
+  it('leaves a packet parked in the jev column by a Jev failure untraced', () => {
+    // It is resting there for good rather than waiting on a verdict, so the
+    // stage it stopped at must not read as work still in progress.
+    const { chip, activity } = renderChip(packet({ jevUnavailable: true }))
+
+    expect(activity).toBeNull()
+    expect(chip).toHaveTextContent(SKIPPED_BADGE_TEXT)
+  })
+
+  it('leaves a settled packet the board cannot bucket untraced', () => {
+    expect(renderChip(packet({ stage: 'verdict' })).activity).toBeNull()
+  })
+
+  it('keeps a traced chip a working button that still shows its selection', () => {
+    const { chip, onSelect, activity } = renderChip(packet({ stage: 'llama' }), true)
+
+    expect(activity).not.toBeNull()
+    expect(chip).toHaveAttribute('aria-pressed', 'true')
+    expect(chip).toHaveAttribute('data-packet-id', 'pkt-0001')
+    expect(chip).toHaveAccessibleName('search GET /search 3210 ms, llama stage')
+
+    chip.click()
+
+    expect(onSelect).toHaveBeenCalledWith('pkt-0001')
   })
 })
