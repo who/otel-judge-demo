@@ -615,6 +615,37 @@ select {
   background: var(--verdict-escalate-soft);
 }
 
+/*
+ * The reason block under the badge. Its heading is small, muted and tracked
+ * out so the reason itself stays the paragraph a reviewer reads; the two sit
+ * tighter than the panel's own gap so they read as one unit rather than as a
+ * stray word above a stray sentence.
+ */
+.verdict-panel__why {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.verdict-panel__why-label {
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.verdict-panel__why-text {
+  overflow-wrap: anywhere;
+}
+
+/* Nothing was published: said in the muted voice the panel uses for absence. */
+.verdict-panel__why-text[data-why='missing'] {
+  color: var(--ink-muted);
+  font-style: italic;
+}
+
 .verdict-panel__rationale {
   overflow-wrap: anywhere;
 }

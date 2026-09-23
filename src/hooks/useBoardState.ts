@@ -69,6 +69,8 @@ const VERDICT_LABELS: readonly string[] = ['pass', 'flag', 'escalate']
 /**
  * The inspector renders label, rationale and actions directly, so a verdict
  * that lacks any of them is omitted rather than passed through to crash it.
+ * The critique is not checked here because it is allowed to be missing; see
+ * `verdictWithCritique` for how an unusable one is handled.
  */
 function isLlamaVerdict(value: unknown): value is LlamaVerdict {
   return (
@@ -79,6 +81,22 @@ function isLlamaVerdict(value: unknown): value is LlamaVerdict {
     Array.isArray(value.actions) &&
     value.actions.every((action) => typeof action === 'string')
   )
+}
+
+/**
+ * Copy a verdict across with its critique settled. The critique is the one
+ * part of a verdict that may legitimately be missing: builds older than the
+ * critique wire omit the key, and a producer that carries it unset sends null
+ * or an empty string. All three mean the same thing, and none of them is a
+ * reason to throw away an otherwise sound judgement, so anything that is not
+ * real text leaves the field absent and the inspector falls back to the
+ * rationale. Rebuilding the object rather than passing the payload's own
+ * through is what keeps a junk critique from reaching the panel.
+ */
+function verdictWithCritique(verdict: LlamaVerdict): LlamaVerdict {
+  const { label, rationale, actions, critique } = verdict
+  const text = typeof critique === 'string' ? critique.trim() : ''
+  return text === '' ? { label, rationale, actions } : { label, rationale, actions, critique: text }
 }
 
 /**
@@ -121,7 +139,7 @@ function adaptPacket(value: unknown): Packet | null {
     },
   }
   if (isJevDistribution(jev)) packet.jev = jev
-  if (isLlamaVerdict(llama)) packet.llama = llama
+  if (isLlamaVerdict(llama)) packet.llama = verdictWithCritique(llama)
   const jevMs = latencyMs(jevLatencyMs)
   if (jevMs !== undefined) packet.jevLatencyMs = jevMs
   const llamaMs = latencyMs(llamaLatencyMs)

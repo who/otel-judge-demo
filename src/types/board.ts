@@ -27,6 +27,14 @@ export interface LlamaVerdict {
   label: LlamaVerdictLabel
   /** Free-text explanation of the verdict, shown verbatim in the inspector. */
   rationale: string
+  /**
+   * Llama's own account of why this label and not another one, published
+   * alongside the verdict. Optional because Judge builds older than the
+   * critique wire never send it, so an absent critique means the board is
+   * talking to such a build rather than that Llama had nothing to say; the
+   * inspector prefers it over the rationale and falls back when it is absent.
+   */
+  critique?: string
   /** Recommended follow-up actions, rendered as a list. May be empty. */
   actions: string[]
 }

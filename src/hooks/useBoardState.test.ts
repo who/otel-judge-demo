@@ -104,6 +104,23 @@ describe('adaptAgentState', () => {
     expect(board?.packets[2]?.llama).toEqual({ label: 'pass', rationale: 'Fine.', actions: [] })
   })
 
+  it('carries a verdict critique through and treats an unusable one as absent', () => {
+    const base = { label: 'flag', rationale: 'Slow but served.', actions: [] }
+    const board = adaptAgentState({
+      packets: [
+        { id: 'critiqued', stage: 'verdict', llama: { ...base, critique: '  Jev saw a latency spike.  ' } },
+        { id: 'null-critique', stage: 'verdict', llama: { ...base, critique: null } },
+        { id: 'empty-critique', stage: 'verdict', llama: { ...base, critique: '   ' } },
+        { id: 'numeric-critique', stage: 'verdict', llama: { ...base, critique: 7 } },
+      ],
+    })
+
+    expect(board?.packets[0]?.llama?.critique).toBe('Jev saw a latency spike.')
+    // An unusable critique never costs the packet its verdict: the label and
+    // rationale still arrive, and the inspector falls back to the rationale.
+    expect(board?.packets.slice(1).map((packet) => packet.llama)).toEqual([base, base, base])
+  })
+
   it('keeps decision times that are real durations and drops the rest', () => {
     const board = adaptAgentState({
       packets: [
