@@ -1,11 +1,11 @@
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { vi } from 'vitest'
-import { Board } from './Board'
+import { Board, columnLabel } from './Board'
 import { SKIPPED_BADGE_TEXT } from './PacketChip'
 import { mockBoardState } from '../mock/boardFixture'
 import { BOARD_COLUMNS, columnForPacket } from '../types/board'
-import type { BoardState, LlamaVerdictLabel, Packet, PacketStage } from '../types/board'
+import type { BoardColumn, BoardState, LlamaVerdictLabel, Packet, PacketStage } from '../types/board'
 
 function renderBoard(state: BoardState, selectedId: string | null = null) {
   const onSelect = vi.fn()
@@ -13,8 +13,13 @@ function renderBoard(state: BoardState, selectedId: string | null = null) {
   return { onSelect }
 }
 
+/**
+ * A column addressed by its key. The region is found through the header the
+ * board actually prints, so a column whose label carries a prefix is reached
+ * by the same `pass` or `flag` every other test in here already uses.
+ */
 function column(name: string) {
-  return screen.getByRole('region', { name: new RegExp(`^${name}`) })
+  return screen.getByRole('region', { name: new RegExp(`^${columnLabel(name as BoardColumn)}`) })
 }
 
 /** A minimal packet built here rather than from the fixture, so the ordering tests own their timestamps. */
@@ -49,7 +54,12 @@ describe('Board', () => {
 
     const headings = screen.getAllByRole('heading', { level: 2 })
     expect(headings.map((h) => h.querySelector('.board-column__name')?.textContent)).toEqual([
-      ...BOARD_COLUMNS,
+      'ingest',
+      'jev',
+      'llama',
+      'Verdict: pass',
+      'Verdict: flag',
+      'Verdict: escalate',
     ])
 
     for (const name of BOARD_COLUMNS) {
@@ -97,7 +107,9 @@ describe('Board', () => {
     renderBoard(mockBoardState())
 
     expect(chipIds(column('pass'))).toContain('pkt-0006')
-    expect(screen.queryByRole('region', { name: /^verdict/ })).not.toBeInTheDocument()
+    // `verdict` is a wire stage, not a column: a judged packet is filed under
+    // its label, so nothing on the board is keyed for the stage itself.
+    expect(document.querySelector("[data-column='verdict']")).toBeNull()
   })
 
   it('files flagged and escalated packets in their own buckets', () => {
@@ -158,6 +170,23 @@ describe('Board', () => {
     expect(within(column('llama')).getByText('No packets')).toBeInTheDocument()
     expect(within(column('llama')).getByLabelText('0 packets')).toHaveTextContent('0')
     expect(within(column('escalate')).queryByText('No packets')).not.toBeInTheDocument()
+  })
+
+  it('attributes the outcome headers to the verdict and leaves the stages bare', () => {
+    const state = mockBoardState()
+    state.packets = []
+    renderBoard(state)
+
+    for (const label of ['Verdict: pass', 'Verdict: flag', 'Verdict: escalate']) {
+      expect(screen.getByRole('region', { name: new RegExp(`^${label}`) })).toBeInTheDocument()
+    }
+    // An empty bucket still says whose judgement it is waiting for.
+    expect(within(column('escalate')).getByText('No packets')).toBeInTheDocument()
+
+    for (const stage of ['ingest', 'jev', 'llama']) {
+      expect(column(stage)).toHaveAttribute('data-column', stage)
+    }
+    expect(screen.queryByText(/^Verdict: (ingest|jev|llama)/)).not.toBeInTheDocument()
   })
 
   it('renders an empty column for every stage and outcome on an empty board', () => {

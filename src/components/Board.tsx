@@ -169,6 +169,30 @@ function receivedAtMs(packet: Packet): number | undefined {
   return Number.isNaN(parsed) ? undefined : parsed
 }
 
+/**
+ * Headers that differ from the column's own name. The three outcome buckets are
+ * named after Llama's labels, and a bare `pass` reads as a stage a packet got
+ * through rather than the judgement it was given; saying whose word it is keeps
+ * the outcome columns from being mistaken for more of the pipeline. The
+ * in-flight stages are absent because they need no such disambiguation — they
+ * name where a packet is, not a decision about it — and fall through below.
+ */
+const COLUMN_LABELS: Partial<Record<BoardColumn, string>> = {
+  pass: 'Verdict: pass',
+  flag: 'Verdict: flag',
+  escalate: 'Verdict: escalate',
+}
+
+/**
+ * The header text for a column. Exported so tests address a column by the same
+ * string the board prints rather than a second copy that can drift from it; the
+ * column key itself is untouched, so routing, `data-column`, and the styling
+ * hung off it all keep working on the bare name.
+ */
+export function columnLabel(column: BoardColumn): string {
+  return COLUMN_LABELS[column] ?? column
+}
+
 interface BoardColumnSectionProps {
   column: BoardColumn
   packets: Packet[]
@@ -181,7 +205,7 @@ function BoardColumnSection({ column, packets, selectedId, onSelect }: BoardColu
   return (
     <section className="board-column" data-column={column} aria-labelledby={headingId}>
       <h2 id={headingId} className="board-column__header">
-        <span className="board-column__name">{column}</span>
+        <span className="board-column__name">{columnLabel(column)}</span>
         <span className="board-column__count" aria-label={`${packets.length} packets`}>
           {packets.length}
         </span>
